@@ -15,8 +15,13 @@ function TenantDashboard() {
   const [submittingRequest, setSubmittingRequest] = useState(false);
   const [payingRequestId, setPayingRequestId] = useState(null);
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [expandedTimelineId, setExpandedTimelineId] = useState(null);
+  const [requestHistories, setRequestHistories] = useState({});
+  const [loadingHistoryId, setLoadingHistoryId] = useState(null);
+  
+const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("");
+  const [priority, setPriority] = useState("medium");
 
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("success");
@@ -30,7 +35,10 @@ function TenantDashboard() {
     setLoadingRoom(true);
 
     try {
-      const data = await apiRequest("/maintenance-requests/my-room");
+      const data = await apiRequest(
+        "/maintenance-requests/my-room"
+      );
+
       setRoom(data.room);
     } catch (error) {
       setRoom(null);
@@ -48,14 +56,47 @@ function TenantDashboard() {
         "/maintenance-requests/my-requests"
       );
 
-      setRequests(data.requests || []);
+      setRequests(
+        Array.isArray(data.requests) ? data.requests : []
+      );
     } catch (error) {
       showMessage(error.message, "error");
     } finally {
       setLoadingRequests(false);
     }
   }
+  async function toggleTimeline(requestId) {
+  if (expandedTimelineId === requestId) {
+    setExpandedTimelineId(null);
+    return;
+  }
 
+  setExpandedTimelineId(requestId);
+
+  if (requestHistories[requestId]) {
+    return;
+  }
+
+  setLoadingHistoryId(requestId);
+
+  try {
+    const data = await apiRequest(
+      `/maintenance-history/${requestId}`
+    );
+
+    setRequestHistories((previous) => ({
+      ...previous,
+      [requestId]: Array.isArray(data.history)
+        ? data.history
+        : [],
+    }));
+  } catch (error) {
+    showMessage(error.message, "error");
+    setExpandedTimelineId(null);
+  } finally {
+    setLoadingHistoryId(null);
+  }
+}
   useEffect(() => {
     const token = localStorage.getItem("token");
     const savedUser = localStorage.getItem("user");
@@ -87,6 +128,7 @@ function TenantDashboard() {
     } catch {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+
       navigate("/login", { replace: true });
     }
   }, [navigate]);
@@ -103,6 +145,19 @@ function TenantDashboard() {
       return;
     }
 
+    if (!category || !description.trim()) {
+      showMessage(
+        "Please select a category and describe the problem.",
+        "error"
+      );
+      return;
+    }
+
+    if (!["urgent", "medium", "low"].includes(priority)) {
+      showMessage("Please select a valid priority.", "error");
+      return;
+    }
+
     setSubmittingRequest(true);
 
     try {
@@ -110,15 +165,19 @@ function TenantDashboard() {
         method: "POST",
         body: JSON.stringify({
           roomId: room.roomId,
-          title,
-          description,
+          description: description.trim(),
+          category,
+          priority,
         }),
       });
 
-      setTitle("");
       setDescription("");
+      setCategory("");
+      setPriority("medium");
 
-      showMessage("Maintenance request submitted successfully.");
+      showMessage(
+        "Maintenance request submitted successfully."
+      );
 
       await loadMaintenanceRequests();
     } catch (error) {
@@ -131,9 +190,15 @@ function TenantDashboard() {
   async function handlePayNow(request) {
     setMessage("");
 
-    const savedUser = JSON.parse(
-      localStorage.getItem("user") || "{}"
-    );
+    let savedUser = {};
+
+    try {
+      savedUser = JSON.parse(
+        localStorage.getItem("user") || "{}"
+      );
+    } catch {
+      savedUser = {};
+    }
 
     const defaultPhone = savedUser.phone || "";
 
@@ -147,12 +212,14 @@ function TenantDashboard() {
     }
 
     const digits = enteredPhone.replace(/\D/g, "");
-
     let phoneNumber = digits;
 
     if (digits.startsWith("0") && digits.length === 10) {
       phoneNumber = `254${digits.slice(1)}`;
-    } else if (digits.startsWith("7") && digits.length === 9) {
+    } else if (
+      digits.startsWith("7") &&
+      digits.length === 9
+    ) {
       phoneNumber = `254${digits}`;
     }
 
@@ -164,10 +231,15 @@ function TenantDashboard() {
       return;
     }
 
+    const requestDescription =
+      request.category ||
+      request.title ||
+      "maintenance request";
+
     const confirmed = window.confirm(
       `Initiate an M-Pesa payment of KSh ${(
         Number(request.repair_cost_cents) / 100
-      ).toLocaleString()} for "${request.title}" to ${phoneNumber}?`
+      ).toLocaleString()} for "${requestDescription}" to ${phoneNumber}?`
     );
 
     if (!confirmed) {
@@ -205,6 +277,38 @@ function TenantDashboard() {
     navigate("/login", { replace: true });
   }
 
+  function formatCategory(categoryValue) {
+    const categoryLabels = {
+      plumbing: "Plumbing",
+      electrical: "Electrical",
+      cleaning: "Cleaning",
+      appliance: "Appliances",
+      structural: "Structural Damage",
+      other: "Other",
+    };
+
+    return (
+      categoryLabels[categoryValue] ||
+      categoryValue ||
+      "Maintenance Request"
+    );
+  }
+
+  function formatPriority(priorityValue) {
+    const validPriority = [
+      "urgent",
+      "medium",
+      "low",
+    ].includes(priorityValue)
+      ? priorityValue
+      : "medium";
+
+    return (
+      validPriority.charAt(0).toUpperCase() +
+      validPriority.slice(1)
+    );
+  }
+
   const totalRequests = requests.length;
 
   const pendingRequests = requests.filter(
@@ -219,7 +323,9 @@ function TenantDashboard() {
     return (
       <div style={styles.page}>
         <main style={styles.container}>
-          <p style={styles.muted}>Loading your dashboard...</p>
+          <p style={styles.muted}>
+            Loading your dashboard...
+          </p>
         </main>
       </div>
     );
@@ -241,6 +347,7 @@ function TenantDashboard() {
           <span style={styles.muted}>{user.name}</span>
 
           <button
+            type="button"
             onClick={handleLogout}
             style={styles.secondaryButton}
           >
@@ -256,11 +363,12 @@ function TenantDashboard() {
           </h2>
 
           <p style={styles.muted}>
-            Welcome back, {user.name}. Here is your maintenance overview.
+            Welcome back, {user.name}. Here is your maintenance
+            overview.
           </p>
 
           <p style={styles.muted}>
-            {user.email} {"·"} {user.role}
+            {user.email} · {user.role}
           </p>
         </section>
 
@@ -331,6 +439,7 @@ function TenantDashboard() {
           )}
 
           <button
+            type="button"
             onClick={loadTenantRoom}
             disabled={loadingRoom}
             style={{
@@ -339,7 +448,9 @@ function TenantDashboard() {
               opacity: loadingRoom ? 0.7 : 1,
             }}
           >
-            {loadingRoom ? "Loading..." : "Refresh Room Details"}
+            {loadingRoom
+              ? "Loading..."
+              : "Refresh Room Details"}
           </button>
         </section>
 
@@ -349,27 +460,69 @@ function TenantDashboard() {
           </h2>
 
           <p style={styles.muted}>
-            Describe the problem in your room so the maintenance team
-            can review it.
+            Select the category and priority, then describe the
+            problem so the maintenance team can review it.
           </p>
 
           <form onSubmit={handleCreateRequest}>
-            <label htmlFor="title" style={styles.label}>
-              Issue Title
+            <label
+              htmlFor="category"
+              style={styles.label}
+            >
+              Maintenance Category
             </label>
 
-            <input
-              id="title"
-              type="text"
-              maxLength={150}
-              placeholder="e.g. Broken shower tap"
+            <select
+              id="category"
               style={styles.input}
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
+              value={category}
+              onChange={(event) =>
+                setCategory(event.target.value)
+              }
               required
-            />
+            >
+              <option value="">Select a category</option>
+              <option value="plumbing">Plumbing</option>
+              <option value="electrical">Electrical</option>
+              <option value="cleaning">Cleaning</option>
+              <option value="appliance">Appliances</option>
+              <option value="structural">
+                Structural Damage
+              </option>
+              <option value="other">Other</option>
+            </select>
 
-            <label htmlFor="description" style={styles.label}>
+            <label
+              htmlFor="priority"
+              style={styles.label}
+            >
+              Issue Priority
+            </label>
+
+            <select
+              id="priority"
+              style={styles.input}
+              value={priority}
+              onChange={(event) =>
+                setPriority(event.target.value)
+              }
+              required
+            >
+              <option value="urgent">
+                Urgent — needs immediate attention
+              </option>
+              <option value="medium">
+                Medium — normal maintenance
+              </option>
+              <option value="low">
+                Low — can wait
+              </option>
+            </select>
+
+            <label
+              htmlFor="description"
+              style={styles.label}
+            >
               Describe the Issue
             </label>
 
@@ -398,7 +551,9 @@ function TenantDashboard() {
               style={{
                 ...styles.button,
                 opacity:
-                  submittingRequest || loadingRoom || !room?.roomId
+                  submittingRequest ||
+                  loadingRoom ||
+                  !room?.roomId
                     ? 0.7
                     : 1,
               }}
@@ -430,29 +585,37 @@ function TenantDashboard() {
             </h2>
 
             <button
+              type="button"
               onClick={loadMaintenanceRequests}
               disabled={loadingRequests}
               style={styles.secondaryButton}
             >
-              {loadingRequests ? "Refreshing..." : "Refresh Requests"}
+              {loadingRequests
+                ? "Refreshing..."
+                : "Refresh Requests"}
             </button>
           </div>
 
           {loadingRequests ? (
             <div style={styles.card}>
-              <p style={styles.muted}>Loading your requests...</p>
+              <p style={styles.muted}>
+                Loading your requests...
+              </p>
             </div>
           ) : requests.length === 0 ? (
             <div style={styles.card}>
               <h3>No requests yet</h3>
 
               <p style={styles.muted}>
-                Your submitted maintenance requests will appear here.
+                Your submitted maintenance requests will appear
+                here.
               </p>
             </div>
           ) : (
             requests.map((request) => {
-              const repairCost = Number(request.repair_cost_cents);
+              const repairCost = Number(
+                request.repair_cost_cents
+              );
 
               const paymentStatus = request.payment_status;
 
@@ -480,13 +643,25 @@ function TenantDashboard() {
                     }}
                   >
                     <h3 style={{ margin: "0 0 12px" }}>
-                      {request.title}
+                      {formatCategory(request.category)}
                     </h3>
 
-                    <span style={getStatusStyle(request.status)}>
-                      {request.status.replace("_", " ")}
+                    <span
+                      style={getStatusStyle(request.status)}
+                    >
+                      {(request.status || "unknown").replace(
+                        "_",
+                        " "
+                      )}
                     </span>
                   </div>
+
+                  <p style={styles.muted}>
+                    Priority:{" "}
+                    <strong>
+                      {formatPriority(request.priority)}
+                    </strong>
+                  </p>
 
                   <p style={{ lineHeight: 1.6 }}>
                     {request.description}
@@ -494,8 +669,91 @@ function TenantDashboard() {
 
                   <p style={styles.muted}>
                     Submitted:{" "}
-                    {new Date(request.created_at).toLocaleString()}
+                    {request.created_at
+                      ? new Date(
+                          request.created_at
+                        ).toLocaleString()
+                      : "Unavailable"}
                   </p>
+                  <button
+  type="button"
+  onClick={() => toggleTimeline(request.id)}
+  style={{
+    ...styles.secondaryButton,
+    marginTop: "8px",
+  }}
+>
+  {expandedTimelineId === request.id
+    ? "Hide Timeline"
+    : "View Timeline"}
+</button>
+
+{expandedTimelineId === request.id && (
+  <div
+    style={{
+      marginTop: "16px",
+      padding: "16px",
+      border: "1px solid #ddd",
+      borderRadius: "8px",
+    }}
+  >
+    <h4 style={{ marginTop: 0 }}>
+      Maintenance Timeline
+    </h4>
+
+    <div style={{ marginBottom: "16px" }}>
+      <strong>Request submitted</strong>
+
+      <p style={styles.muted}>
+        {request.created_at
+          ? new Date(request.created_at).toLocaleString()
+          : "Submission date unavailable"}
+      </p>
+    </div>
+
+    {loadingHistoryId === request.id ? (
+      <p style={styles.muted}>
+        Loading timeline...
+      </p>
+    ) : requestHistories[request.id]?.length > 0 ? (
+      requestHistories[request.id].map((event) => (
+        <div
+          key={event.id}
+          style={{
+            borderLeft: "3px solid #ccc",
+            paddingLeft: "12px",
+            marginBottom: "16px",
+          }}
+        >
+          <strong>
+            {(event.new_status || "updated")
+              .replaceAll("_", " ")
+              .replace(/\b\w/g, (letter) =>
+                letter.toUpperCase()
+              )}
+          </strong>
+
+          {event.note && (
+            <p style={{ margin: "6px 0" }}>
+              {event.note}
+            </p>
+          )}
+
+          <p style={styles.muted}>
+            {event.changed_by_name || "System"} ·{" "}
+            {event.created_at
+              ? new Date(event.created_at).toLocaleString()
+              : "Date unavailable"}
+          </p>
+        </div>
+      ))
+    ) : (
+      <p style={styles.muted}>
+        No additional history has been recorded yet.
+      </p>
+    )}
+  </div>
+)}
 
                   {request.responsible_party && (
                     <p style={styles.muted}>
@@ -504,12 +762,13 @@ function TenantDashboard() {
                     </p>
                   )}
 
-                  {Number.isFinite(repairCost) && repairCost > 0 && (
-                    <p style={styles.muted}>
-                      Repair cost: KSh{" "}
-                      {(repairCost / 100).toLocaleString()}
-                    </p>
-                  )}
+                  {Number.isFinite(repairCost) &&
+                    repairCost > 0 && (
+                      <p style={styles.muted}>
+                        Repair cost: KSh{" "}
+                        {(repairCost / 100).toLocaleString()}
+                      </p>
+                    )}
 
                   {paymentStatus === "paid" && (
                     <p style={styles.muted}>
@@ -519,25 +778,29 @@ function TenantDashboard() {
 
                   {paymentStatus === "pending" && (
                     <p style={styles.muted}>
-                      Payment is awaiting processing. Please check again shortly.
+                      Payment is awaiting processing. Please
+                      check again shortly.
                     </p>
                   )}
 
                   {paymentStatus === "processing" && (
                     <p style={styles.muted}>
-                      Payment is processing. Wait for M-Pesa confirmation before trying again.
+                      Payment is processing. Wait for M-Pesa
+                      confirmation before trying again.
                     </p>
                   )}
 
                   {paymentStatus === "failed" && (
                     <p style={styles.error}>
-                      Payment failed. You can try again using M-Pesa.
+                      Payment failed. You can try again using
+                      M-Pesa.
                     </p>
                   )}
 
                   {paymentStatus === "cancelled" && (
                     <p style={styles.muted}>
-                      Payment was cancelled. You can initiate another payment.
+                      Payment was cancelled. You can initiate
+                      another payment.
                     </p>
                   )}
 
@@ -550,7 +813,9 @@ function TenantDashboard() {
                         ...styles.button,
                         marginTop: "12px",
                         opacity:
-                          payingRequestId === request.id ? 0.7 : 1,
+                          payingRequestId === request.id
+                            ? 0.7
+                            : 1,
                       }}
                     >
                       {payingRequestId === request.id

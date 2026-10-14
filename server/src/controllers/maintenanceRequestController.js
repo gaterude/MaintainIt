@@ -1,23 +1,24 @@
-
 const maintenanceRequestService = require("../services/maintenanceRequestService");
 
 async function createMaintenanceRequest(req, res) {
   try {
     const {
       roomId,
-      title,
       description,
+      category,
+      priority,
     } = req.body;
 
     const request =
       await maintenanceRequestService.createMaintenanceRequest({
         userId: req.user.id,
         roomId,
-        title,
         description,
+        category,
+        priority,
       });
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "Maintenance request created successfully",
       request,
     });
@@ -27,7 +28,7 @@ async function createMaintenanceRequest(req, res) {
       error
     );
 
-    res.status(400).json({
+    return res.status(400).json({
       message: error.message,
     });
   }
@@ -40,7 +41,7 @@ async function getTenantRequests(req, res) {
         req.user.id
       );
 
-    res.status(200).json({
+    return res.status(200).json({
       requests,
     });
   } catch (error) {
@@ -49,7 +50,7 @@ async function getTenantRequests(req, res) {
       error
     );
 
-    res.status(400).json({
+    return res.status(400).json({
       message: error.message,
     });
   }
@@ -62,7 +63,7 @@ async function getTenantRoomDetails(req, res) {
         req.user.id
       );
 
-    res.status(200).json({
+    return res.status(200).json({
       room: roomDetails,
     });
   } catch (error) {
@@ -76,7 +77,7 @@ async function getTenantRoomDetails(req, res) {
         ? 404
         : 500;
 
-    res.status(statusCode).json({
+    return res.status(statusCode).json({
       message: error.message,
     });
   }
@@ -87,7 +88,7 @@ async function getPendingRequests(req, res) {
     const requests =
       await maintenanceRequestService.getPendingRequests();
 
-    res.status(200).json({
+    return res.status(200).json({
       requests,
     });
   } catch (error) {
@@ -96,11 +97,12 @@ async function getPendingRequests(req, res) {
       error
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       message: "Failed to retrieve pending requests",
     });
   }
 }
+
 async function getAllRequests(req, res) {
   try {
     const requests =
@@ -110,13 +112,17 @@ async function getAllRequests(req, res) {
       requests,
     });
   } catch (error) {
-    console.error("Get all maintenance requests error:", error);
+    console.error(
+      "Get all maintenance requests error:",
+      error
+    );
 
     return res.status(500).json({
       message: "Failed to retrieve maintenance requests",
     });
   }
 }
+
 async function getRequestDetails(req, res) {
   try {
     const request =
@@ -130,7 +136,7 @@ async function getRequestDetails(req, res) {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       request,
     });
   } catch (error) {
@@ -139,7 +145,7 @@ async function getRequestDetails(req, res) {
       error
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       message: "Failed to retrieve maintenance request",
     });
   }

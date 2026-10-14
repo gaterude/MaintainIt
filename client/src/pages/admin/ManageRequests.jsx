@@ -1,404 +1,658 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiRequest from "../../services/api";
 import { styles, getStatusStyle } from "../../styles";
 
 function ManageRequests() {
-  const navigate = useNavigate();
+const navigate = useNavigate();
 
-  const [requests, setRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
-  const [submittingId, setSubmittingId] = useState(null);
+const [requests, setRequests] = useState([]);
+const [loading, setLoading] = useState(true);
+const [message, setMessage] = useState("");
+const [errorMessage, setErrorMessage] = useState("");
+const [submittingId, setSubmittingId] = useState(null);
 
-  const [decisions, setDecisions] = useState({});
+const [decisions, setDecisions] = useState({});
+const [search, setSearch] = useState("");
+const [priorityFilter, setPriorityFilter] = useState("all");
+const [categoryFilter, setCategoryFilter] = useState("all");
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    const savedUser = localStorage.getItem("user");
+useEffect(() => {
+const token = localStorage.getItem("token");
+const savedUser = localStorage.getItem("user");
 
-    if (!token || !savedUser) {
+
+if (!token || !savedUser) {
+  navigate("/login", { replace: true });
+  return;
+}
+
+try {
+  const user = JSON.parse(savedUser);
+
+  if (user.role !== "admin") {
+    if (user.role === "tenant") {
+      navigate("/tenant/dashboard", { replace: true });
+    } else if (user.role === "fundi") {
+      navigate("/fundi/dashboard", { replace: true });
+    } else {
       navigate("/login", { replace: true });
-      return;
     }
 
-    try {
-      const user = JSON.parse(savedUser);
-
-      if (user.role !== "admin") {
-        if (user.role === "tenant") {
-          navigate("/tenant/dashboard", { replace: true });
-        } else if (user.role === "fundi") {
-          navigate("/fundi/dashboard", { replace: true });
-        } else {
-          navigate("/login", { replace: true });
-        }
-
-        return;
-      }
-    } catch {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      navigate("/login", { replace: true });
-      return;
-    }
-
-    async function loadRequests() {
-      try {
-        const data = await apiRequest(
-          "/maintenance-requests/pending"
-        );
-
-        setRequests(
-          Array.isArray(data.requests) ? data.requests : []
-        );
-      } catch (error) {
-        setErrorMessage(
-          error.message || "Unable to load maintenance requests."
-        );
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadRequests();
-  }, [navigate]);
-
-  function handleLogout() {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    navigate("/login", { replace: true });
+    return;
   }
+} catch {
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  navigate("/login", { replace: true });
+  return;
+}
 
-  function handleDecisionChange(requestId, field, value) {
-    setDecisions((previous) => ({
-      ...previous,
-      [requestId]: {
-        ...previous[requestId],
-        [field]: value,
-      },
-    }));
+async function loadRequests() {
+  try {
+    const data = await apiRequest(
+      "/maintenance-requests/pending"
+    );
+
+    setRequests(
+      Array.isArray(data.requests) ? data.requests : []
+    );
+  } catch (error) {
+    setErrorMessage(
+      error.message || "Unable to load maintenance requests."
+    );
+  } finally {
+    setLoading(false);
   }
+}
 
-  async function handleSubmitDecision(event, request) {
-    event.preventDefault();
+loadRequests();
 
-    setMessage("");
-    setErrorMessage("");
 
-    const requestId = request.id || request.request_id;
-    const decision = decisions[requestId] || {};
+}, [navigate]);
 
-    if (!requestId) {
-      setErrorMessage(
-        "This request does not have a valid request ID."
-      );
-      return;
-    }
+function handleLogout() {
+localStorage.removeItem("token");
+localStorage.removeItem("user");
+navigate("/login", { replace: true });
+}
 
-    if (
-      !decision.responsibleParty ||
-      !decision.reason?.trim() ||
-      decision.repairCostKes === undefined ||
-      decision.repairCostKes === ""
-    ) {
-      setErrorMessage(
-        "Choose who is responsible, enter the repair cost, and provide a reason."
-      );
-      return;
-    }
+function handleDecisionChange(requestId, field, value) {
+setDecisions((previous) => ({
+...previous,
+[requestId]: {
+...previous[requestId],
+[field]: value,
+},
+}));
+}
 
-    const repairCost = Number(decision.repairCostKes);
+async function handleSubmitDecision(event, request) {
+event.preventDefault();
 
-    if (!Number.isFinite(repairCost) || repairCost <= 0) {
-      setErrorMessage(
-        "Enter a repair cost greater than zero."
-      );
-      return;
-    }
 
-    if (!Number.isInteger(repairCost)) {
-      setErrorMessage(
-        "Enter the repair cost as a whole amount in KSh."
-      );
-      return;
-    }
+setMessage("");
+setErrorMessage("");
 
-    setSubmittingId(requestId);
+const requestId = request.id || request.request_id;
+const decision = decisions[requestId] || {};
 
-    try {
-      await apiRequest("/maintenance-responsibilities", {
-        method: "POST",
-        body: JSON.stringify({
-          requestId,
-          responsibleParty: decision.responsibleParty,
-          reason: decision.reason.trim(),
-          repairCostKes: repairCost,
-        }),
-      });
+if (!requestId) {
+  setErrorMessage(
+    "This request does not have a valid request ID."
+  );
+  return;
+}
 
-      setRequests((previous) =>
-        previous.filter(
-          (item) => (item.id || item.request_id) !== requestId
-        )
-      );
+if (
+  !decision.responsibleParty ||
+  !decision.reason?.trim() ||
+  decision.repairCostKes === undefined ||
+  decision.repairCostKes === ""
+) {
+  setErrorMessage(
+    "Choose who is responsible, enter the repair cost, and provide a reason."
+  );
+  return;
+}
 
-      setDecisions((previous) => {
-        const updated = { ...previous };
-        delete updated[requestId];
-        return updated;
-      });
+const repairCost = Number(decision.repairCostKes);
 
-      setMessage(
-        `Responsibility decision saved for "${request.title || "maintenance request"}".`
-      );
-    } catch (error) {
-      setErrorMessage(
-        error.message ||
-          "Unable to save the responsibility decision."
-      );
-    } finally {
-      setSubmittingId(null);
-    }
-  }
+if (!Number.isFinite(repairCost) || repairCost <= 0) {
+  setErrorMessage(
+    "Enter a repair cost greater than zero."
+  );
+  return;
+}
+
+if (!Number.isInteger(repairCost)) {
+  setErrorMessage(
+    "Enter the repair cost as a whole amount in KSh."
+  );
+  return;
+}
+
+setSubmittingId(requestId);
+
+try {
+  await apiRequest("/maintenance-responsibilities", {
+    method: "POST",
+    body: JSON.stringify({
+      requestId,
+      responsibleParty: decision.responsibleParty,
+      reason: decision.reason.trim(),
+      repairCostKes: repairCost,
+    }),
+  });
+
+  setRequests((previous) =>
+    previous.filter(
+      (item) =>
+        (item.id || item.request_id) !== requestId
+    )
+  );
+
+  setDecisions((previous) => {
+    const updated = { ...previous };
+    delete updated[requestId];
+    return updated;
+  });
+
+  setMessage(
+    `Responsibility decision saved for "${
+      request.category ||
+      request.title ||
+      "maintenance request"
+    }".`
+  );
+} catch (error) {
+  setErrorMessage(
+    error.message ||
+      "Unable to save the responsibility decision."
+  );
+} finally {
+  setSubmittingId(null);
+}
+
+
+}
+
+function formatCategory(category) {
+if (!category) {
+return "Uncategorized";
+}
+
+
+return category
+  .replace(/_/g, " ")
+  .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+
+}
+
+function getPriority(request) {
+return ["urgent", "medium", "low"].includes(request.priority)
+? request.priority
+: "medium";
+}
+
+function formatPriority(priority) {
+return priority.charAt(0).toUpperCase() + priority.slice(1);
+}
+
+const categories = [
+  "plumbing",
+  "electrical",
+  "cleaning",
+  "appliance",
+  "structural",
+  "other",
+];
+
+const priorityCounts = {
+urgent: requests.filter(
+(request) => getPriority(request) === "urgent"
+).length,
+medium: requests.filter(
+(request) => getPriority(request) === "medium"
+).length,
+low: requests.filter(
+(request) => getPriority(request) === "low"
+).length,
+};
+
+const filteredRequests = useMemo(() => {
+const searchTerm = search.trim().toLowerCase();
+
+return requests.filter((request) => {
+  const searchableText = [
+    request.tenant_name,
+    request.tenant_email,
+    request.description,
+    request.category,
+    request.title,
+    request.property_name,
+    request.room_number,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const matchesSearch =
+    !searchTerm || searchableText.includes(searchTerm);
+
+  const matchesPriority =
+    priorityFilter === "all" ||
+    getPriority(request) === priorityFilter;
+
+  const matchesCategory =
+    categoryFilter === "all" ||
+    request.category === categoryFilter;
 
   return (
-    <div style={styles.page}>
-      <header style={styles.header}>
-        <h1 style={styles.brand}>MaintainIt</h1>
+    matchesSearch &&
+    matchesPriority &&
+    matchesCategory
+  );
+});
 
-        <button
-          type="button"
-          style={styles.secondaryButton}
-          onClick={handleLogout}
+
+}, [requests, search, priorityFilter, categoryFilter]);
+
+return ( <div style={styles.page}> <header style={styles.header}> <h1 style={styles.brand}>MaintainIt</h1>
+
+
+    <button
+      type="button"
+      style={styles.secondaryButton}
+      onClick={handleLogout}
+    >
+      Logout
+    </button>
+  </header>
+
+  <main style={styles.container}>
+    <button
+      type="button"
+      style={styles.secondaryButton}
+      onClick={() => navigate("/admin/dashboard")}
+    >
+      Back to Dashboard
+    </button>
+
+    <div style={styles.welcome}>
+      <h2>Manage Maintenance Requests</h2>
+
+      <p style={styles.muted}>
+        Review pending requests and record responsibility
+        decisions and repair costs.
+      </p>
+    </div>
+
+    {message && (
+      <div
+        role="status"
+        style={{
+          padding: "12px",
+          marginBottom: "16px",
+          border: "1px solid #86b98a",
+          borderRadius: "6px",
+        }}
+      >
+        {message}
+      </div>
+    )}
+
+    {errorMessage && (
+      <div role="alert" style={styles.error}>
+        {errorMessage}
+      </div>
+    )}
+
+    <section style={styles.grid}>
+      <div style={styles.card}>
+        <h3 style={styles.sectionTitle}>Urgent</h3>
+        <p style={styles.statNumber}>
+          {loading ? "..." : priorityCounts.urgent}
+        </p>
+        <p style={styles.muted}>Needs priority review</p>
+      </div>
+
+      <div style={styles.card}>
+        <h3 style={styles.sectionTitle}>Medium</h3>
+        <p style={styles.statNumber}>
+          {loading ? "..." : priorityCounts.medium}
+        </p>
+        <p style={styles.muted}>Normal priority</p>
+      </div>
+
+      <div style={styles.card}>
+        <h3 style={styles.sectionTitle}>Low</h3>
+        <p style={styles.statNumber}>
+          {loading ? "..." : priorityCounts.low}
+        </p>
+        <p style={styles.muted}>Lower priority</p>
+      </div>
+    </section>
+
+    <section
+      style={{
+        ...styles.card,
+        marginTop: "24px",
+      }}
+    >
+      <h3 style={styles.sectionTitle}>
+        Pending Requests ({filteredRequests.length})
+      </h3>
+
+      <div style={{ marginBottom: "16px" }}>
+        <label
+          htmlFor="pending-request-search"
+          style={styles.label}
         >
-          Logout
-        </button>
-      </header>
+          Search requests
+        </label>
 
-      <main style={styles.container}>
-        <button
-          type="button"
-          style={styles.secondaryButton}
-          onClick={() => navigate("/admin/dashboard")}
-        >
-          Back to Dashboard
-        </button>
+        <input
+          id="pending-request-search"
+          type="text"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search tenant, description, property or room"
+          style={{
+            ...styles.input,
+            boxSizing: "border-box",
+          }}
+        />
+      </div>
 
-        <div style={styles.welcome}>
-          <h2>Manage Maintenance Requests</h2>
-          <p style={styles.muted}>
-            Review pending requests and record responsibility
-            decisions and repair costs.
-          </p>
-        </div>
+      <div
+        style={{
+          display: "flex",
+          gap: "12px",
+          flexWrap: "wrap",
+          marginBottom: "16px",
+        }}
+      >
+        <div style={{ flex: "1 1 180px" }}>
+          <label
+            htmlFor="pending-priority-filter"
+            style={styles.label}
+          >
+            Filter by priority
+          </label>
 
-        {message && (
-          <div
-            role="status"
+          <select
+            id="pending-priority-filter"
+            value={priorityFilter}
+            onChange={(event) =>
+              setPriorityFilter(event.target.value)
+            }
             style={{
-              padding: "12px",
-              marginBottom: "16px",
-              border: "1px solid #86b98a",
-              borderRadius: "6px",
+              ...styles.input,
+              boxSizing: "border-box",
             }}
           >
-            {message}
-          </div>
-        )}
+            <option value="all">All priorities</option>
+            <option value="urgent">Urgent</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
 
-        {errorMessage && (
-          <div role="alert" style={styles.error}>
-            {errorMessage}
-          </div>
-        )}
+        <div style={{ flex: "1 1 180px" }}>
+          <label
+            htmlFor="pending-category-filter"
+            style={styles.label}
+          >
+            Filter by category
+          </label>
 
-        <section style={styles.card}>
-          <h3 style={styles.sectionTitle}>
-            Pending Requests ({requests.length})
-          </h3>
+          <select
+            id="pending-category-filter"
+            value={categoryFilter}
+            onChange={(event) =>
+              setCategoryFilter(event.target.value)
+            }
+            style={{
+              ...styles.input,
+              boxSizing: "border-box",
+            }}
+          >
+            <option value="all">All categories</option>
 
-          {loading ? (
-            <p style={styles.muted}>Loading requests...</p>
-          ) : requests.length === 0 ? (
-            <p style={styles.muted}>
-              No pending requests were returned by the server.
-            </p>
-          ) : (
-            requests.map((request, index) => {
-              const requestId =
-                request.id || request.request_id;
+            {categories.map((category) => (
+              <option
+                key={category}
+                value={category}
+              >
+                {formatCategory(category)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
-              const decision = decisions[requestId] || {};
-              const isSubmitting =
-                submittingId === requestId;
+      <p style={styles.muted}>
+        Showing {filteredRequests.length} of {requests.length} pending requests.
+      </p>
 
-              return (
-                <article
-                  key={requestId || index}
-                  style={styles.requestCard}
-                >
-                  <h3>
-                    {request.title || "Maintenance request"}
-                  </h3>
+      {loading ? (
+        <p style={styles.muted}>Loading requests...</p>
+      ) : requests.length === 0 ? (
+        <p style={styles.muted}>
+          No pending requests were returned by the server.
+        </p>
+      ) : filteredRequests.length === 0 ? (
+        <p style={styles.muted}>
+          No pending requests match your search and filters.
+        </p>
+      ) : (
+        filteredRequests.map((request, index) => {
+          const requestId =
+            request.id || request.request_id;
 
-                  <p>
-                    {request.description ||
-                      "No description provided."}
-                  </p>
+          const decision = decisions[requestId] || {};
+          const isSubmitting =
+            submittingId === requestId;
 
-                  <p>
-                    Status:{" "}
-                    <span style={getStatusStyle(request.status)}>
-                      {request.status || "Unknown"}
-                    </span>
-                  </p>
+          return (
+            <article
+              key={requestId || index}
+              style={styles.requestCard}
+            >
+              <h3>
+                {formatCategory(
+                  request.category || request.title
+                )}
+              </h3>
 
-                  {request.room_number && (
-                    <p>Room: {request.room_number}</p>
+              <p>
+                <strong>Priority:</strong>{" "}
+                {formatPriority(getPriority(request))}
+              </p>
+
+              <p>
+                <strong>Description:</strong>{" "}
+                {request.description ||
+                  "No description provided."}
+              </p>
+
+              <p>
+                <strong>Status:</strong>{" "}
+                <span style={getStatusStyle(request.status)}>
+                  {(request.status || "unknown").replace(
+                    "_",
+                    " "
                   )}
+                </span>
+              </p>
 
-                  {request.created_at && (
-                    <p style={styles.muted}>
-                      Submitted:{" "}
-                      {new Date(
-                        request.created_at
-                      ).toLocaleString()}
-                    </p>
-                  )}
+              {request.tenant_name && (
+                <p>
+                  <strong>Tenant:</strong>{" "}
+                  {request.tenant_name}
+                </p>
+              )}
 
-                  <form
-                    onSubmit={(event) =>
-                      handleSubmitDecision(event, request)
-                    }
+              {request.property_name && (
+                <p>
+                  <strong>Property:</strong>{" "}
+                  {request.property_name}
+                </p>
+              )}
+
+              {request.room_number && (
+                <p>
+                  <strong>Room:</strong>{" "}
+                  {request.room_number}
+                </p>
+              )}
+
+              {request.created_at && (
+                <p style={styles.muted}>
+                  Submitted:{" "}
+                  {new Date(
+                    request.created_at
+                  ).toLocaleString()}
+                </p>
+              )}
+
+              <form
+                onSubmit={(event) =>
+                  handleSubmitDecision(event, request)
+                }
+              >
+                <h4>Responsibility Decision</h4>
+
+                <div style={{ marginBottom: "12px" }}>
+                  <label
+                    htmlFor={`party-${requestId}`}
+                    style={{
+                      display: "block",
+                      marginBottom: "6px",
+                    }}
                   >
-                    <h4>Responsibility Decision</h4>
+                    Who is responsible for the repair?
+                  </label>
 
-                    <div style={{ marginBottom: "12px" }}>
-                      <label
-                        htmlFor={`party-${requestId}`}
-                        style={{
-                          display: "block",
-                          marginBottom: "6px",
-                        }}
-                      >
-                        Who is responsible for the repair?
-                      </label>
+                  <select
+                    id={`party-${requestId}`}
+                    value={decision.responsibleParty || ""}
+                    onChange={(event) =>
+                      handleDecisionChange(
+                        requestId,
+                        "responsibleParty",
+                        event.target.value
+                      )
+                    }
+                    required
+                    disabled={isSubmitting}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <option value="">
+                      Select responsible party
+                    </option>
+                    <option value="tenant">Tenant</option>
+                    <option value="admin">
+                      Admin / Property
+                    </option>
+                  </select>
+                </div>
 
-                      <select
-                        id={`party-${requestId}`}
-                        value={decision.responsibleParty || ""}
-                        onChange={(event) =>
-                          handleDecisionChange(
-                            requestId,
-                            "responsibleParty",
-                            event.target.value
-                          )
-                        }
-                        required
-                        disabled={isSubmitting}
-                        style={{
-                          width: "100%",
-                          padding: "10px",
-                          boxSizing: "border-box",
-                        }}
-                      >
-                        <option value="">
-                          Select responsible party
-                        </option>
-                        <option value="tenant">Tenant</option>
-                        <option value="admin">Admin / Property</option>
-                      </select>
-                    </div>
+                <div style={{ marginBottom: "12px" }}>
+                  <label
+                    htmlFor={`cost-${requestId}`}
+                    style={{
+                      display: "block",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    Repair cost (KSh)
+                  </label>
 
-                    <div style={{ marginBottom: "12px" }}>
-                      <label
-                        htmlFor={`cost-${requestId}`}
-                        style={{
-                          display: "block",
-                          marginBottom: "6px",
-                        }}
-                      >
-                        Repair cost (KSh)
-                      </label>
+                  <input
+                    id={`cost-${requestId}`}
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={decision.repairCostKes ?? ""}
+                    onChange={(event) =>
+                      handleDecisionChange(
+                        requestId,
+                        "repairCostKes",
+                        event.target.value
+                      )
+                    }
+                    required
+                    disabled={isSubmitting}
+                    placeholder="e.g. 1500"
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
 
-                      <input
-                        id={`cost-${requestId}`}
-                        type="number"
-                        min="1"
-                        step="1"
-                        value={decision.repairCostKes || ""}
-                        onChange={(event) =>
-                          handleDecisionChange(
-                            requestId,
-                            "repairCostKes",
-                            event.target.value
-                          )
-                        }
-                        required
-                        disabled={isSubmitting}
-                        placeholder="e.g. 1500"
-                        style={{
-                          width: "100%",
-                          padding: "10px",
-                          boxSizing: "border-box",
-                        }}
-                      />
-                    </div>
+                <div style={{ marginBottom: "12px" }}>
+                  <label
+                    htmlFor={`reason-${requestId}`}
+                    style={{
+                      display: "block",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    Reason for the decision
+                  </label>
 
-                    <div style={{ marginBottom: "12px" }}>
-                      <label
-                        htmlFor={`reason-${requestId}`}
-                        style={{
-                          display: "block",
-                          marginBottom: "6px",
-                        }}
-                      >
-                        Reason for the decision
-                      </label>
+                  <textarea
+                    id={`reason-${requestId}`}
+                    value={decision.reason || ""}
+                    onChange={(event) =>
+                      handleDecisionChange(
+                        requestId,
+                        "reason",
+                        event.target.value
+                      )
+                    }
+                    required
+                    disabled={isSubmitting}
+                    rows={3}
+                    placeholder="Explain why the tenant or property is responsible."
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      boxSizing: "border-box",
+                      resize: "vertical",
+                    }}
+                  />
+                </div>
 
-                      <textarea
-                        id={`reason-${requestId}`}
-                        value={decision.reason || ""}
-                        onChange={(event) =>
-                          handleDecisionChange(
-                            requestId,
-                            "reason",
-                            event.target.value
-                          )
-                        }
-                        required
-                        disabled={isSubmitting}
-                        rows={3}
-                        placeholder="Explain why the tenant or property is responsible."
-                        style={{
-                          width: "100%",
-                          padding: "10px",
-                          boxSizing: "border-box",
-                          resize: "vertical",
-                        }}
-                      />
-                    </div>
+                <button
+                  type="submit"
+                  style={styles.primaryButton}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting
+                    ? "Saving decision..."
+                    : "Save Responsibility Decision"}
+                </button>
+              </form>
+            </article>
+          );
+        })
+      )}
+    </section>
+  </main>
+</div>
 
-                    <button
-                      type="submit"
-                      style={styles.primaryButton}
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting
-                        ? "Saving decision..."
-                        : "Save Responsibility Decision"}
-                    </button>
-                  </form>
-                </article>
-              );
-            })
-          )}
-        </section>
-      </main>
-    </div>
-  );
+
+);
 }
 
 export default ManageRequests;

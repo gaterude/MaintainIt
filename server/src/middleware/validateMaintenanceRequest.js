@@ -1,21 +1,60 @@
+const VALID_CATEGORIES = [
+  "plumbing",
+  "electrical",
+  "cleaning",
+  "appliance",
+  "structural",
+  "other",
+];
+
+const VALID_PRIORITIES = [
+  "urgent",
+  "medium",
+  "low",
+];
+
 function validateMaintenanceRequest(req, res, next) {
   const {
     roomId,
-    title,
     description,
+    category,
+    priority = "medium",
   } = req.body;
 
-  if (!roomId || !title || !description) {
+  if (!roomId || !description || !category) {
     return res.status(400).json({
-      message: "Room ID, title and description are required",
+      message: "Room ID, description and category are required",
     });
   }
 
-  if (title.length > 150) {
+  if (
+    typeof description !== "string" ||
+    !description.trim()
+  ) {
     return res.status(400).json({
-      message: "Title must not exceed 150 characters",
+      message: "Description must be a non-empty string",
     });
   }
+
+  if (
+    typeof category !== "string" ||
+    !VALID_CATEGORIES.includes(category)
+  ) {
+    return res.status(400).json({
+      message: "Please select a valid maintenance category",
+    });
+  }
+
+  if (
+    typeof priority !== "string" ||
+    !VALID_PRIORITIES.includes(priority)
+  ) {
+    return res.status(400).json({
+      message: "Priority must be urgent, medium, or low",
+    });
+  }
+
+  req.body.priority = priority;
 
   next();
 }

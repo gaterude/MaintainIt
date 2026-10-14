@@ -11,6 +11,10 @@ const maintenanceAssignmentRoutes = require("./routes/maintenanceAssignmentRoute
 const maintenanceHistoryRoutes = require("./routes/maintenanceHistoryRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 
+const {
+  startOverdueMaintenanceScheduler,
+} = require("./jobs/overdueMaintenanceScheduler");
+
 const app = express();
 
 app.use(cors());
@@ -59,6 +63,10 @@ pool.query("SELECT NOW()", (error, result) => {
     "Database connected:",
     result.rows[0]
   );
+
+  // Start the overdue maintenance scheduler
+  // only after the database connection succeeds.
+  startOverdueMaintenanceScheduler();
 });
 
 const PORT = process.env.PORT || 4000;

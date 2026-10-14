@@ -1,4 +1,3 @@
-
 const maintenanceRequestRepository = require("../repositories/maintenanceRequestRepository");
 const userRepository = require("../repositories/userRepository");
 const { sendSms } = require("./smsService");
@@ -6,8 +5,9 @@ const { sendSms } = require("./smsService");
 async function createMaintenanceRequest({
   userId,
   roomId,
-  title,
   description,
+  category,
+  priority = "medium",
 }) {
   const tenant =
     await maintenanceRequestRepository.findTenantByUserAndRoom(
@@ -23,8 +23,9 @@ async function createMaintenanceRequest({
     await maintenanceRequestRepository.createMaintenanceRequest({
       tenantId: tenant.id,
       roomId,
-      title,
       description,
+      category,
+      priority,
     });
 
   let requestDetails = null;
@@ -41,39 +42,51 @@ async function createMaintenanceRequest({
     );
   }
 
-  const admins = await userRepository.findAdminUsers();
-
   const tenantName = requestDetails?.tenant_name || "A tenant";
   const propertyName = requestDetails?.property_name || "Property";
   const roomNumber = requestDetails?.room_number || roomId;
-  const issueTitle = requestDetails?.title || title;
+  const requestCategory = requestDetails?.category || category;
+  const requestPriority = requestDetails?.priority || priority;
+  const issueDescription =
+    requestDetails?.description || description;
 
-  const message =
-    `MaintainIt: New maintenance request. ` +
-    `Tenant: ${tenantName}. ` +
-    `Property: ${propertyName}. ` +
-    `Room: ${roomNumber}. ` +
-    `Issue: ${issueTitle}. Please review.`;
+  try {
+    const admins = await userRepository.findAdminUsers();
 
-  for (const admin of admins) {
-    if (!admin.phone) {
-      console.warn(
-        `Admin ${admin.id} has no phone number; SMS skipped.`
-      );
-      continue;
+    const message =
+      `MaintainIt: New maintenance request. ` +
+      `Priority: ${requestPriority.toUpperCase()}. ` +
+      `Tenant: ${tenantName}. ` +
+      `Property: ${propertyName}. ` +
+      `Room: ${roomNumber}. ` +
+      `Category: ${requestCategory}. ` +
+      `Description: ${issueDescription}. Please review.`;
+
+    for (const admin of admins) {
+      if (!admin.phone) {
+        console.warn(
+          `Admin ${admin.id} has no phone number; SMS skipped.`
+        );
+        continue;
+      }
+
+      try {
+        await sendSms({
+          phoneNumber: admin.phone,
+          message,
+        });
+      } catch (error) {
+        console.error(
+          `Could not notify admin ${admin.id} by SMS:`,
+          error.message
+        );
+      }
     }
-
-    try {
-      await sendSms({
-        phoneNumber: admin.phone,
-        message,
-      });
-    } catch (error) {
-      console.error(
-        `Could not notify admin ${admin.id} by SMS:`,
-        error.message
-      );
-    }
+  } catch (error) {
+    console.error(
+      "Could not retrieve admins for SMS notification:",
+      error.message
+    );
   }
 
   return maintenanceRequest;
@@ -122,9 +135,11 @@ async function getRequestById(requestId) {
 async function getPendingRequests() {
   return maintenanceRequestRepository.findPendingRequests();
 }
+
 async function getAllRequests() {
   return maintenanceRequestRepository.findAllRequests();
 }
+
 async function getRequestDetails(requestId) {
   return maintenanceRequestRepository.findRequestDetails(
     requestId
