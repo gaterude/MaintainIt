@@ -133,6 +133,44 @@ MaintainIt </h1>
         {loggingIn ? "Signing in..." : "Login"}
       </button>
     </form>
+
+    <p
+      style={{
+        textAlign: "center",
+        marginTop: "22px",
+        marginBottom: 0,
+        fontSize: "14px",
+        color: "#6b7787",
+      }}
+    >
+      Don't have an account?{" "}
+      <a
+        href="/register"
+        onClick={(event) => {
+          event.preventDefault();
+          navigate("/register");
+        }}
+        style={{
+          color: "#28745b",
+          fontWeight: 600,
+          textDecoration: "none",
+        }}
+      >
+        Create a tenant account
+      </a>
+    </p>
+
+    <p
+      style={{
+        textAlign: "center",
+        marginTop: "18px",
+        marginBottom: 0,
+        fontSize: "12px",
+        color: "#6b7787",
+      }}
+    >
+      Fundis and administrators must use accounts created for them.
+    </p>
   </div>
 </div>
 

@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const userRepository = require("../repositories/userRepository");
+const emailService = require("./emailService");
 
 async function createUser({
   name,
@@ -9,25 +10,74 @@ async function createUser({
   password,
   role,
 }) {
-  const existingUser = await userRepository.findUserByEmail(email);
+  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedPhone = phone.trim();
+
+  const existingUser =
+    await userRepository.findUserByEmail(normalizedEmail);
 
   if (existingUser) {
-    throw new Error("A user with this email already exists");
+    throw new Error(
+      "This email address is already registered. Please log in or use another email."
+    );
+  }
+
+  const existingPhone =
+    await userRepository.findUserByPhone(normalizedPhone);
+
+  if (existingPhone) {
+    throw new Error(
+      "This phone number is already registered. Please use another number."
+    );
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
 
-  return userRepository.createUser({
-    name,
-    email,
-    phone,
-    passwordHash,
-    role,
-  });
+  try {
+    return await userRepository.createUser({
+      name: name.trim(),
+      email: normalizedEmail,
+      phone: normalizedPhone,
+      passwordHash,
+      role,
+    });
+  } catch (error) {
+    if (error.code === "23505") {
+      if (error.constraint?.toLowerCase().includes("email")) {
+        throw new Error(
+          "This email address is already registered. Please log in or use another email."
+        );
+      }
+
+      if (error.constraint?.toLowerCase().includes("phone")) {
+        throw new Error(
+          "This phone number is already registered. Please use another number."
+        );
+      }
+    }
+
+    throw error;
+  }
 }
 
 async function loginUser({ email, password }) {
-  const user = await userRepository.findUserByEmail(email);
+  if (
+    typeof email !== "string" ||
+    !email.trim() ||
+    typeof password !== "string" ||
+    !password
+  ) {
+    throw new Error("Email and password are required");
+  }
+
+  if (!process.env.JWT_SECRET) {
+    throw new Error("Authentication service is not configured");
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const user =
+    await userRepository.findUserByEmail(normalizedEmail);
 
   if (!user) {
     throw new Error("Invalid email or password");
@@ -42,26 +92,34 @@ async function loginUser({ email, password }) {
     throw new Error("Invalid email or password");
   }
 
+  const tokenOptions = {
+    expiresIn: process.env.JWT_EXPIRES_IN || "1h",
+  };
+
   const token = jwt.sign(
     {
       id: user.id,
       role: user.role,
     },
     process.env.JWT_SECRET,
-    {
-      expiresIn: process.env.JWT_EXPIRES_IN,
-    }
+    tokenOptions
   );
+
+  const loggedInUser = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    role: user.role,
+  };
+
+  emailService.sendLoginNotification(loggedInUser).catch((error) => {
+    console.error("Login notification email failed:", error.message);
+  });
 
   return {
     token,
-    user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
-    },
+    user: loggedInUser,
   };
 }
 
@@ -73,4 +131,4 @@ module.exports = {
   createUser,
   loginUser,
   getFundis,
-};
+}

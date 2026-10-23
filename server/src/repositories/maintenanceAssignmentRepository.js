@@ -111,7 +111,10 @@ async function findAssignmentsByFundi(fundiId) {
       mr.status,
       r.room_number,
       p.name AS property_name,
-      p.address AS property_address
+      p.address AS property_address,
+      latest_payment.id AS payment_id,
+      latest_payment.status AS payment_status,
+      latest_payment.payment_method AS payment_method
     FROM maintenance_assignments ma
     JOIN maintenance_requests mr
       ON mr.id = ma.maintenance_request_id
@@ -119,6 +122,16 @@ async function findAssignmentsByFundi(fundiId) {
       ON r.id = mr.room_id
     JOIN properties p
       ON p.id = r.property_id
+    LEFT JOIN LATERAL (
+      SELECT
+        pay.id,
+        pay.status,
+        pay.payment_method
+      FROM payments pay
+      WHERE pay.maintenance_request_id = mr.id
+      ORDER BY pay.created_at DESC
+      LIMIT 1
+    ) latest_payment ON TRUE
     WHERE ma.fundi_id = $1
     ORDER BY ma.assigned_at DESC;
   `;
@@ -127,6 +140,8 @@ async function findAssignmentsByFundi(fundiId) {
 
   return result.rows;
 }
+
+
 
 async function findAssignmentByRequestAndFundi(
   requestId,

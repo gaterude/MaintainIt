@@ -1,7 +1,51 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiRequest from "../../services/api";
-import { styles, getStatusStyle } from "../../styles";
+import "./TenantDashboard.css";
+
+const categories = [
+  { value: "plumbing", label: "Plumbing" },
+  { value: "electrical", label: "Electrical" },
+  { value: "cleaning", label: "Cleaning" },
+  { value: "appliance", label: "Appliance" },
+  { value: "structural", label: "Structural" },
+  { value: "other", label: "Other" },
+];
+
+const priorities = [
+  { value: "low", label: "Low — can wait" },
+  { value: "medium", label: "Medium — normal maintenance" },
+  { value: "urgent", label: "Urgent — needs attention" },
+];
+
+function formatLabel(value) {
+  if (!value) return "Not available";
+
+  return String(value)
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatDate(value) {
+  if (!value) return "Date unavailable";
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime())
+    ? "Date unavailable"
+    : date.toLocaleDateString("en-KE", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+}
+
+function formatMoney(cents) {
+  return `KSh ${(Number(cents) / 100).toLocaleString("en-KE", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}`;
+}
 
 function TenantDashboard() {
   const navigate = useNavigate();
@@ -15,13 +59,10 @@ function TenantDashboard() {
   const [submittingRequest, setSubmittingRequest] = useState(false);
   const [payingRequestId, setPayingRequestId] = useState(null);
 
-  const [expandedTimelineId, setExpandedTimelineId] = useState(null);
-  const [requestHistories, setRequestHistories] = useState({});
-  const [loadingHistoryId, setLoadingHistoryId] = useState(null);
-  
-const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [priority, setPriority] = useState("medium");
+  const [description, setDescription] = useState("");
+  const [requestFilter, setRequestFilter] = useState("all");
 
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("success");
@@ -30,23 +71,29 @@ const [description, setDescription] = useState("");
     setMessage(text);
     setMessageType(type);
   }
+async function loadTenantRoom() {
+  setLoadingRoom(true);
 
-  async function loadTenantRoom() {
-    setLoadingRoom(true);
+  try {
+    const data = await apiRequest("/maintenance-requests/my-room");
+    setRoom(data.room || null);
+  } catch (error) {
+    setRoom(null);
 
-    try {
-      const data = await apiRequest(
-        "/maintenance-requests/my-room"
+    if (error.status === 404) {
+      setMessage("");
+    } else {
+      showMessage(
+        error.message || "Unable to load your room details.",
+        "error"
       );
-
-      setRoom(data.room);
-    } catch (error) {
-      setRoom(null);
-      showMessage(error.message, "error");
-    } finally {
-      setLoadingRoom(false);
     }
+  } finally {
+    setLoadingRoom(false);
   }
+}
+
+
 
   async function loadMaintenanceRequests() {
     setLoadingRequests(true);
@@ -56,47 +103,17 @@ const [description, setDescription] = useState("");
         "/maintenance-requests/my-requests"
       );
 
-      setRequests(
-        Array.isArray(data.requests) ? data.requests : []
-      );
+      setRequests(Array.isArray(data.requests) ? data.requests : []);
     } catch (error) {
-      showMessage(error.message, "error");
+      showMessage(
+        error.message || "Unable to load maintenance requests.",
+        "error"
+      );
     } finally {
       setLoadingRequests(false);
     }
   }
-  async function toggleTimeline(requestId) {
-  if (expandedTimelineId === requestId) {
-    setExpandedTimelineId(null);
-    return;
-  }
 
-  setExpandedTimelineId(requestId);
-
-  if (requestHistories[requestId]) {
-    return;
-  }
-
-  setLoadingHistoryId(requestId);
-
-  try {
-    const data = await apiRequest(
-      `/maintenance-history/${requestId}`
-    );
-
-    setRequestHistories((previous) => ({
-      ...previous,
-      [requestId]: Array.isArray(data.history)
-        ? data.history
-        : [],
-    }));
-  } catch (error) {
-    showMessage(error.message, "error");
-    setExpandedTimelineId(null);
-  } finally {
-    setLoadingHistoryId(null);
-  }
-}
   useEffect(() => {
     const token = localStorage.getItem("token");
     const savedUser = localStorage.getItem("user");
@@ -122,13 +139,11 @@ const [description, setDescription] = useState("");
       }
 
       setUser(loggedInUser);
-
       loadTenantRoom();
       loadMaintenanceRequests();
     } catch {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
-
       navigate("/login", { replace: true });
     }
   }, [navigate]);
@@ -139,7 +154,7 @@ const [description, setDescription] = useState("");
 
     if (!room?.roomId) {
       showMessage(
-        "Your room information is unavailable. Please refresh your room details.",
+        "Your room information is unavailable. Refresh your room details and try again.",
         "error"
       );
       return;
@@ -147,14 +162,9 @@ const [description, setDescription] = useState("");
 
     if (!category || !description.trim()) {
       showMessage(
-        "Please select a category and describe the problem.",
+        "Select a category and describe the maintenance problem.",
         "error"
       );
-      return;
-    }
-
-    if (!["urgent", "medium", "low"].includes(priority)) {
-      showMessage("Please select a valid priority.", "error");
       return;
     }
 
@@ -165,23 +175,23 @@ const [description, setDescription] = useState("");
         method: "POST",
         body: JSON.stringify({
           roomId: room.roomId,
-          description: description.trim(),
           category,
           priority,
+          description: description.trim(),
         }),
       });
 
-      setDescription("");
       setCategory("");
       setPriority("medium");
+      setDescription("");
 
-      showMessage(
-        "Maintenance request submitted successfully."
-      );
-
+      showMessage("Maintenance request submitted successfully.");
       await loadMaintenanceRequests();
     } catch (error) {
-      showMessage(error.message, "error");
+      showMessage(
+        error.message || "Unable to submit your request.",
+        "error"
+      );
     } finally {
       setSubmittingRequest(false);
     }
@@ -193,11 +203,10 @@ const [description, setDescription] = useState("");
     let savedUser = {};
 
     try {
-      savedUser = JSON.parse(
-        localStorage.getItem("user") || "{}"
-      );
+      savedUser = JSON.parse(localStorage.getItem("user") || "{}");
     } catch {
-      savedUser = {};
+      showMessage("Your session information is invalid.", "error");
+      return;
     }
 
     const defaultPhone = savedUser.phone || "";
@@ -207,19 +216,14 @@ const [description, setDescription] = useState("");
       defaultPhone
     );
 
-    if (enteredPhone === null) {
-      return;
-    }
+    if (enteredPhone === null) return;
 
     const digits = enteredPhone.replace(/\D/g, "");
     let phoneNumber = digits;
 
     if (digits.startsWith("0") && digits.length === 10) {
       phoneNumber = `254${digits.slice(1)}`;
-    } else if (
-      digits.startsWith("7") &&
-      digits.length === 9
-    ) {
+    } else if (digits.startsWith("7") && digits.length === 9) {
       phoneNumber = `254${digits}`;
     }
 
@@ -231,20 +235,24 @@ const [description, setDescription] = useState("");
       return;
     }
 
-    const requestDescription =
-      request.category ||
-      request.title ||
-      "maintenance request";
+    const repairCost = Number(request.repair_cost_cents);
 
-    const confirmed = window.confirm(
-      `Initiate an M-Pesa payment of KSh ${(
-        Number(request.repair_cost_cents) / 100
-      ).toLocaleString()} for "${requestDescription}" to ${phoneNumber}?`
-    );
-
-    if (!confirmed) {
+    if (!Number.isFinite(repairCost) || repairCost <= 0) {
+      showMessage("The repair cost is invalid.", "error");
       return;
     }
+
+    const requestLabel = formatLabel(
+      request.category || request.title
+    );
+
+    const confirmed = window.confirm(
+      `Initiate an M-Pesa payment of ${formatMoney(
+        repairCost
+      )} for "${requestLabel}" to ${phoneNumber}?`
+    );
+
+    if (!confirmed) return;
 
     setPayingRequestId(request.id);
 
@@ -264,7 +272,57 @@ const [description, setDescription] = useState("");
 
       await loadMaintenanceRequests();
     } catch (error) {
-      showMessage(error.message, "error");
+      showMessage(
+        error.message || "Unable to initiate the M-Pesa payment.",
+        "error"
+      );
+    } finally {
+      setPayingRequestId(null);
+    }
+  }
+    async function handleCashPayment(request) {
+    setMessage("");
+
+    const repairCost = Number(request.repair_cost_cents);
+
+    if (!Number.isFinite(repairCost) || repairCost <= 0) {
+      showMessage("The repair cost is invalid.", "error");
+      return;
+    }
+
+    const requestLabel = formatLabel(
+      request.category || request.title
+    );
+
+    const confirmed = window.confirm(
+      `Choose cash payment for ${formatMoney(
+        repairCost
+      )} for "${requestLabel}"? Your assigned fundi must confirm receiving the cash.`
+    );
+
+    if (!confirmed) return;
+
+    setPayingRequestId(request.id);
+
+    try {
+      const result = await apiRequest("/payments/cash/initiate", {
+        method: "POST",
+        body: JSON.stringify({
+          requestId: request.id,
+        }),
+      });
+
+      showMessage(
+        result.message ||
+          "Cash payment recorded as pending. Ask your assigned fundi to confirm receipt."
+      );
+
+      await loadMaintenanceRequests();
+    } catch (error) {
+      showMessage(
+        error.message || "Unable to initiate the cash payment.",
+        "error"
+      );
     } finally {
       setPayingRequestId(null);
     }
@@ -273,565 +331,634 @@ const [description, setDescription] = useState("");
   function handleLogout() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-
     navigate("/login", { replace: true });
-  }
-
-  function formatCategory(categoryValue) {
-    const categoryLabels = {
-      plumbing: "Plumbing",
-      electrical: "Electrical",
-      cleaning: "Cleaning",
-      appliance: "Appliances",
-      structural: "Structural Damage",
-      other: "Other",
-    };
-
-    return (
-      categoryLabels[categoryValue] ||
-      categoryValue ||
-      "Maintenance Request"
-    );
-  }
-
-  function formatPriority(priorityValue) {
-    const validPriority = [
-      "urgent",
-      "medium",
-      "low",
-    ].includes(priorityValue)
-      ? priorityValue
-      : "medium";
-
-    return (
-      validPriority.charAt(0).toUpperCase() +
-      validPriority.slice(1)
-    );
   }
 
   const totalRequests = requests.length;
 
   const pendingRequests = requests.filter(
-    (request) => request.status === "pending"
+    (request) => request.status?.toLowerCase() === "pending"
   ).length;
 
   const completedRequests = requests.filter(
-    (request) => request.status === "completed"
+    (request) => request.status?.toLowerCase() === "completed"
   ).length;
+
+  const filteredRequests = requests.filter((request) => {
+    if (requestFilter === "all") {
+      return true;
+    }
+
+    return request.status?.toLowerCase() === requestFilter;
+  });
+
+  function handleStatClick(filter) {
+    setRequestFilter(filter);
+
+    window.setTimeout(() => {
+      document.getElementById("my-requests")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 50);
+  }
+
+  function getPaymentInfo(request) {
+const status = request.payment_status;
+const method = request.payment_method;
+
+if (status === "paid") {
+  return {
+    label: "Paid",
+    className: "mi-payment-paid",
+    description:
+      method === "cash"
+        ? "Cash received and confirmed by your fundi."
+        : "Payment confirmed.",
+  };
+}
+
+if (status === "processing") {
+  return {
+    label: method === "cash" ? "Cash Pending Confirmation" : "M-Pesa Processing",
+    className: "mi-payment-pending",
+    description:
+      method === "cash"
+        ? "Your fundi must confirm receipt of the cash."
+        : "Check your phone for the M-Pesa payment prompt.",
+  };
+}
+
+if (status === "pending") {
+  return {
+    label: method === "cash" ? "Cash Awaiting Confirmation" : "Payment Pending",
+    className: "mi-payment-pending",
+    description:
+      method === "cash"
+        ? "Your fundi must confirm receipt of the cash."
+        : "Your payment has not yet been confirmed.",
+  };
+}
+
+if (status === "failed" || status === "cancelled") {
+  return {
+    label: method === "cash" ? "Cash Payment Not Completed" : "Payment Not Completed",
+    className: "mi-payment-failed",
+    description:
+      method === "cash"
+        ? "The cash payment was not completed."
+        : "You can try M-Pesa again.",
+  };
+}
+
+return null;
+
+
+}
 
   if (!user) {
     return (
-      <div style={styles.page}>
-        <main style={styles.container}>
-          <p style={styles.muted}>
-            Loading your dashboard...
-          </p>
-        </main>
+      <div className="mi-loading-screen">
+        <p>Loading your dashboard...</p>
       </div>
     );
   }
 
   return (
-    <div style={styles.page}>
-      <header style={styles.header}>
-        <h1 style={styles.brand}>MaintainIt</h1>
+    <div className="mi-dashboard">
+      <aside className="mi-sidebar">
+        <a className="mi-brand" href="#dashboard">
+          <span>MaintainIt</span>
+        </a>
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "15px",
-            flexWrap: "wrap",
-          }}
+        <nav className="mi-navigation" aria-label="Main navigation">
+          <a className="mi-nav-link mi-nav-active" href="#dashboard">
+            Dashboard
+          </a>
+
+          <a className="mi-nav-link" href="#my-requests">
+            My Requests
+          </a>
+
+          <a className="mi-nav-link" href="#my-room">
+            My Room
+          </a>
+
+          <a className="mi-nav-link" href="#profile">
+            Profile
+          </a>
+        </nav>
+
+        <button
+          type="button"
+          className="mi-logout"
+          onClick={handleLogout}
         >
-          <span style={styles.muted}>{user.name}</span>
+          Logout
+        </button>
+      </aside>
 
-          <button
-            type="button"
-            onClick={handleLogout}
-            style={styles.secondaryButton}
-          >
-            Logout
-          </button>
-        </div>
-      </header>
-
-      <main style={styles.container}>
-        <section style={styles.welcome}>
-          <h2 style={{ fontSize: "28px", marginBottom: "8px" }}>
-            Tenant Dashboard
-          </h2>
-
-          <p style={styles.muted}>
-            Welcome back, {user.name}. Here is your maintenance
-            overview.
-          </p>
-
-          <p style={styles.muted}>
-            {user.email} · {user.role}
-          </p>
-        </section>
-
-        {message && (
-          <div
-            role="status"
-            style={
-              messageType === "error"
-                ? styles.error
-                : styles.message
-            }
-          >
-            {message}
-          </div>
-        )}
-
-        <section style={styles.grid}>
-          <div style={styles.card}>
-            <p style={styles.muted}>Total Requests</p>
-            <p style={styles.statNumber}>{totalRequests}</p>
+      <div className="mi-main">
+        <header className="mi-topbar" id="profile">
+          <div className="mi-mobile-brand">
+            MaintainIt
           </div>
 
-          <div style={styles.card}>
-            <p style={styles.muted}>Pending Requests</p>
-            <p style={styles.statNumber}>{pendingRequests}</p>
-          </div>
-
-          <div style={styles.card}>
-            <p style={styles.muted}>Completed Requests</p>
-            <p style={styles.statNumber}>{completedRequests}</p>
-          </div>
-        </section>
-
-        <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>My Room</h2>
-
-          {loadingRoom ? (
-            <p style={styles.muted}>
-              Loading your room details...
-            </p>
-          ) : room ? (
-            <div style={styles.roomGrid}>
-              <div>
-                <p style={styles.roomLabel}>Room Number</p>
-                <p style={styles.roomValue}>
-                  {room.roomNumber || "Unavailable"}
-                </p>
-              </div>
-
-              <div>
-                <p style={styles.roomLabel}>Property</p>
-                <p style={styles.roomValue}>
-                  {room.propertyName || "Unavailable"}
-                </p>
-              </div>
-
-              <div>
-                <p style={styles.roomLabel}>Address</p>
-                <p style={styles.roomValue}>
-                  {room.propertyAddress || "Unavailable"}
-                </p>
-              </div>
+          <div className="mi-user">
+            <div className="mi-avatar">
+              {(user.name || "T").charAt(0).toUpperCase()}
             </div>
-          ) : (
-            <p style={styles.muted}>
-              Your room details could not be loaded.
-            </p>
-          )}
 
-          <button
-            type="button"
-            onClick={loadTenantRoom}
-            disabled={loadingRoom}
-            style={{
-              ...styles.secondaryButton,
-              marginTop: "20px",
-              opacity: loadingRoom ? 0.7 : 1,
-            }}
-          >
-            {loadingRoom
-              ? "Loading..."
-              : "Refresh Room Details"}
-          </button>
-        </section>
-
-        <section style={styles.card}>
-          <h2 style={styles.sectionTitle}>
-            Submit a Maintenance Request
-          </h2>
-
-          <p style={styles.muted}>
-            Select the category and priority, then describe the
-            problem so the maintenance team can review it.
-          </p>
-
-          <form onSubmit={handleCreateRequest}>
-            <label
-              htmlFor="category"
-              style={styles.label}
-            >
-              Maintenance Category
-            </label>
-
-            <select
-              id="category"
-              style={styles.input}
-              value={category}
-              onChange={(event) =>
-                setCategory(event.target.value)
-              }
-              required
-            >
-              <option value="">Select a category</option>
-              <option value="plumbing">Plumbing</option>
-              <option value="electrical">Electrical</option>
-              <option value="cleaning">Cleaning</option>
-              <option value="appliance">Appliances</option>
-              <option value="structural">
-                Structural Damage
-              </option>
-              <option value="other">Other</option>
-            </select>
-
-            <label
-              htmlFor="priority"
-              style={styles.label}
-            >
-              Issue Priority
-            </label>
-
-            <select
-              id="priority"
-              style={styles.input}
-              value={priority}
-              onChange={(event) =>
-                setPriority(event.target.value)
-              }
-              required
-            >
-              <option value="urgent">
-                Urgent — needs immediate attention
-              </option>
-              <option value="medium">
-                Medium — normal maintenance
-              </option>
-              <option value="low">
-                Low — can wait
-              </option>
-            </select>
-
-            <label
-              htmlFor="description"
-              style={styles.label}
-            >
-              Describe the Issue
-            </label>
-
-            <textarea
-              id="description"
-              placeholder="Explain what is wrong and where you noticed the problem."
-              style={styles.textarea}
-              value={description}
-              onChange={(event) =>
-                setDescription(event.target.value)
-              }
-              required
-            />
-
-            <p style={styles.muted}>
-              Room:{" "}
-              <strong>
-                {loadingRoom
-                  ? "Loading room information..."
-                  : room?.roomNumber || "Unavailable"}
-              </strong>
-            </p>
-
-            <button
-              type="submit"
-              style={{
-                ...styles.button,
-                opacity:
-                  submittingRequest ||
-                  loadingRoom ||
-                  !room?.roomId
-                    ? 0.7
-                    : 1,
-              }}
-              disabled={
-                submittingRequest ||
-                loadingRoom ||
-                !room?.roomId
-              }
-            >
-              {submittingRequest
-                ? "Submitting..."
-                : "Submit Request"}
-            </button>
-          </form>
-        </section>
-
-        <section>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: "12px",
-            }}
-          >
-            <h2 style={styles.sectionTitle}>
-              My Maintenance Requests
-            </h2>
+            <div className="mi-user-details">
+              <strong>{user.name}</strong>
+              <span>Tenant</span>
+            </div>
 
             <button
               type="button"
-              onClick={loadMaintenanceRequests}
-              disabled={loadingRequests}
-              style={styles.secondaryButton}
+              className="mi-top-logout"
+              onClick={handleLogout}
             >
-              {loadingRequests
-                ? "Refreshing..."
-                : "Refresh Requests"}
+              Logout
             </button>
           </div>
+        </header>
 
-          {loadingRequests ? (
-            <div style={styles.card}>
-              <p style={styles.muted}>
-                Loading your requests...
+        <main className="mi-content" id="dashboard">
+          <section className="mi-welcome-banner">
+            <div className="mi-welcome-copy">
+              <p className="mi-eyebrow">YOUR HOME, WELL MAINTAINED</p>
+              <h1>Welcome back, {user.name}!</h1>
+              <p>
+                Here is your maintenance overview. Keep your home
+                safe, comfortable and in good condition.
               </p>
             </div>
-          ) : requests.length === 0 ? (
-            <div style={styles.card}>
-              <h3>No requests yet</h3>
+          </section>
 
-              <p style={styles.muted}>
-                Your submitted maintenance requests will appear
-                here.
-              </p>
+          {message && (
+            <div
+              className={`mi-alert ${
+                messageType === "error"
+                  ? "mi-alert-error"
+                  : "mi-alert-success"
+              }`}
+              role={messageType === "error" ? "alert" : "status"}
+            >
+              <p>{message}</p>
+
+              <button
+                type="button"
+                onClick={() => setMessage("")}
+                aria-label="Dismiss message"
+              >
+                Dismiss
+              </button>
             </div>
-          ) : (
-            requests.map((request) => {
-              const repairCost = Number(
-                request.repair_cost_cents
-              );
+          )}
 
-              const paymentStatus = request.payment_status;
+          <section className="mi-stats-grid" aria-label="Request summary">
+            <button
+              type="button"
+              className={`mi-stat-card ${
+                requestFilter === "all" ? "mi-stat-selected" : ""
+              }`}
+              onClick={() => handleStatClick("all")}
+              aria-pressed={requestFilter === "all"}
+              disabled={loadingRequests}
+            >
+              <div>
+                <p>Total Requests</p>
+                <strong>
+                  {loadingRequests ? "—" : totalRequests}
+                </strong>
+              </div>
+            </button>
 
-              const canPay =
-                request.status === "completed" &&
-                request.responsible_party === "tenant" &&
-                !["paid", "pending", "processing"].includes(
-                  paymentStatus
-                ) &&
-                Number.isFinite(repairCost) &&
-                repairCost > 0;
+            <button
+              type="button"
+              className={`mi-stat-card ${
+                requestFilter === "pending" ? "mi-stat-selected" : ""
+              }`}
+              onClick={() => handleStatClick("pending")}
+              aria-pressed={requestFilter === "pending"}
+              disabled={loadingRequests}
+            >
+              <div>
+                <p>Pending Requests</p>
+                <strong>
+                  {loadingRequests ? "—" : pendingRequests}
+                </strong>
+              </div>
+            </button>
 
-              return (
-                <article
-                  key={request.id}
-                  style={styles.requestCard}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      gap: "12px",
-                      flexWrap: "wrap",
-                    }}
+            <button
+              type="button"
+              className={`mi-stat-card ${
+                requestFilter === "completed" ? "mi-stat-selected" : ""
+              }`}
+              onClick={() => handleStatClick("completed")}
+              aria-pressed={requestFilter === "completed"}
+              disabled={loadingRequests}
+            >
+              <div>
+                <p>Completed Requests</p>
+                <strong>
+                  {loadingRequests ? "—" : completedRequests}
+                </strong>
+              </div>
+            </button>
+          </section>
+
+          <div className="mi-dashboard-columns">
+            <div className="mi-left-column">
+              <section className="mi-panel" id="my-room">
+                <div className="mi-panel-heading">
+                  <div className="mi-heading-title">
+                    <h2>My Room</h2>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="mi-text-button"
+                    onClick={loadTenantRoom}
+                    disabled={loadingRoom}
                   >
-                    <h3 style={{ margin: "0 0 12px" }}>
-                      {formatCategory(request.category)}
-                    </h3>
+                    {loadingRoom ? "Loading..." : "Refresh"}
+                  </button>
+                </div>
 
-                    <span
-                      style={getStatusStyle(request.status)}
-                    >
-                      {(request.status || "unknown").replace(
-                        "_",
-                        " "
-                      )}
+                {loadingRoom ? (
+                  <div className="mi-empty-inline">
+                    Loading your room details...
+                  </div>
+                ) : room ? (
+                  <div className="mi-room-details">
+                    <div className="mi-room-detail">
+                      <span>Room Number</span>
+                      <strong>{room.roomNumber || "Unavailable"}</strong>
+                    </div>
+
+                    <div className="mi-room-detail">
+                      <span>Property</span>
+                      <strong>
+                        {room.propertyName || "Unavailable"}
+                      </strong>
+                    </div>
+
+                    <div className="mi-room-detail mi-room-address">
+                      <span>Address</span>
+                      <strong>
+                        {room.propertyAddress || "Unavailable"}
+                      </strong>
+                    </div>
+                  </div>
+               
+            ) : (
+              <div className="mi-empty-inline">
+                <h3>Waiting for Room Assignment</h3>
+
+                <p>
+                  Your account has been registered successfully.
+                  Please wait for the administrator to assign you
+                  a room. Your room details will appear here once
+                  the assignment is complete.
+                </p>
+
+                <button
+                  type="button"
+                  className="mi-text-button"
+                  onClick={loadTenantRoom}
+                  disabled={loadingRoom}
+                >
+                  {loadingRoom ? "Checking..." : "Check Again"}
+                </button>
+              </div>
+            )}
+
+              </section>
+
+              <section className="mi-panel" id="new-request">
+                <div className="mi-panel-heading mi-heading-start">
+                  <div>
+                    <h2>Submit a Maintenance Request</h2>
+                    <p>
+                      Select a category and describe the problem.
+                    </p>
+                  </div>
+                </div>
+
+                <form
+                  className="mi-request-form"
+                  onSubmit={handleCreateRequest}
+                >
+                  <div className="mi-form-row">
+                    <div className="mi-form-field">
+                      <label htmlFor="mi-category">Category</label>
+
+                      <select
+                        id="mi-category"
+                        value={category}
+                        onChange={(event) =>
+                          setCategory(event.target.value)
+                        }
+                        required
+                      >
+                        <option value="">Select a category</option>
+
+                        {categories.map((item) => (
+                          <option
+                            key={item.value}
+                            value={item.value}
+                          >
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="mi-form-field">
+                      <label htmlFor="mi-priority">Priority</label>
+
+                      <select
+                        id="mi-priority"
+                        value={priority}
+                        onChange={(event) =>
+                          setPriority(event.target.value)
+                        }
+                        required
+                      >
+                        {priorities.map((item) => (
+                          <option
+                            key={item.value}
+                            value={item.value}
+                          >
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="mi-form-field">
+                    <label htmlFor="mi-description">Description</label>
+
+                    <textarea
+                      id="mi-description"
+                      placeholder="Explain what is wrong and where you noticed the problem..."
+                      value={description}
+                      onChange={(event) =>
+                        setDescription(event.target.value)
+                      }
+                      maxLength={3000}
+                      rows={5}
+                      required
+                    />
+                  </div>
+
+                  <div className="mi-room-notice">
+                    <span>
+                      Room:{" "}
+                      <strong>
+                        {loadingRoom
+                          ? "Loading room information..."
+                          : room?.roomNumber || "Unavailable"}
+                      </strong>
                     </span>
                   </div>
 
-                  <p style={styles.muted}>
-                    Priority:{" "}
-                    <strong>
-                      {formatPriority(request.priority)}
-                    </strong>
-                  </p>
-
-                  <p style={{ lineHeight: 1.6 }}>
-                    {request.description}
-                  </p>
-
-                  <p style={styles.muted}>
-                    Submitted:{" "}
-                    {request.created_at
-                      ? new Date(
-                          request.created_at
-                        ).toLocaleString()
-                      : "Unavailable"}
-                  </p>
                   <button
-  type="button"
-  onClick={() => toggleTimeline(request.id)}
-  style={{
-    ...styles.secondaryButton,
-    marginTop: "8px",
-  }}
->
-  {expandedTimelineId === request.id
-    ? "Hide Timeline"
-    : "View Timeline"}
-</button>
+                    type="submit"
+                    className="mi-primary-button"
+                    disabled={
+                      submittingRequest ||
+                      loadingRoom ||
+                      !room?.roomId
+                    }
+                  >
+                    {submittingRequest
+                      ? "Submitting request..."
+                      : "Submit Request"}
+                  </button>
+                </form>
+              </section>
+            </div>
 
-{expandedTimelineId === request.id && (
-  <div
-    style={{
-      marginTop: "16px",
-      padding: "16px",
-      border: "1px solid #ddd",
-      borderRadius: "8px",
-    }}
-  >
-    <h4 style={{ marginTop: 0 }}>
-      Maintenance Timeline
-    </h4>
+            <section
+              className="mi-panel mi-requests-panel"
+              id="my-requests"
+            >
+              <div className="mi-panel-heading mi-requests-heading">
+                <div className="mi-heading-title">
+                  <h2>My Maintenance Requests</h2>
+                </div>
 
-    <div style={{ marginBottom: "16px" }}>
-      <strong>Request submitted</strong>
+                <button
+                  type="button"
+                  className="mi-refresh-button"
+                  onClick={loadMaintenanceRequests}
+                  disabled={loadingRequests}
+                >
+                  {loadingRequests ? "Refreshing..." : "Refresh"}
+                </button>
+              </div>
 
-      <p style={styles.muted}>
-        {request.created_at
-          ? new Date(request.created_at).toLocaleString()
-          : "Submission date unavailable"}
-      </p>
-    </div>
+              {requestFilter !== "all" && (
+                <div className="mi-filter-banner">
+                  <span>
+                    Showing:{" "}
+                    <strong>
+                      {formatLabel(requestFilter)} Requests
+                    </strong>
+                  </span>
 
-    {loadingHistoryId === request.id ? (
-      <p style={styles.muted}>
-        Loading timeline...
-      </p>
-    ) : requestHistories[request.id]?.length > 0 ? (
-      requestHistories[request.id].map((event) => (
-        <div
-          key={event.id}
-          style={{
-            borderLeft: "3px solid #ccc",
-            paddingLeft: "12px",
-            marginBottom: "16px",
-          }}
-        >
-          <strong>
-            {(event.new_status || "updated")
-              .replaceAll("_", " ")
-              .replace(/\b\w/g, (letter) =>
-                letter.toUpperCase()
+                  <button
+                    type="button"
+                    onClick={() => setRequestFilter("all")}
+                  >
+                    View all requests
+                  </button>
+                </div>
               )}
-          </strong>
 
-          {event.note && (
-            <p style={{ margin: "6px 0" }}>
-              {event.note}
-            </p>
-          )}
+              {loadingRequests ? (
+                <div className="mi-empty-state">
+                  <p>Loading your requests...</p>
+                </div>
+              ) : filteredRequests.length === 0 ? (
+                <div className="mi-empty-state">
+                  <h3>
+                    {requestFilter === "all"
+                      ? "No requests yet"
+                      : `No ${requestFilter} requests`}
+                  </h3>
 
-          <p style={styles.muted}>
-            {event.changed_by_name || "System"} ·{" "}
-            {event.created_at
-              ? new Date(event.created_at).toLocaleString()
-              : "Date unavailable"}
-          </p>
-        </div>
-      ))
-    ) : (
-      <p style={styles.muted}>
-        No additional history has been recorded yet.
-      </p>
-    )}
-  </div>
-)}
+                  <p>
+                    {requestFilter === "all"
+                      ? "Your maintenance requests will appear here after you submit your first one."
+                      : "There are no requests in this category right now."}
+                  </p>
 
-                  {request.responsible_party && (
-                    <p style={styles.muted}>
-                      Responsible party:{" "}
-                      {request.responsible_party}
-                    </p>
-                  )}
-
-                  {Number.isFinite(repairCost) &&
-                    repairCost > 0 && (
-                      <p style={styles.muted}>
-                        Repair cost: KSh{" "}
-                        {(repairCost / 100).toLocaleString()}
-                      </p>
-                    )}
-
-                  {paymentStatus === "paid" && (
-                    <p style={styles.muted}>
-                      Payment status: Paid
-                    </p>
-                  )}
-
-                  {paymentStatus === "pending" && (
-                    <p style={styles.muted}>
-                      Payment is awaiting processing. Please
-                      check again shortly.
-                    </p>
-                  )}
-
-                  {paymentStatus === "processing" && (
-                    <p style={styles.muted}>
-                      Payment is processing. Wait for M-Pesa
-                      confirmation before trying again.
-                    </p>
-                  )}
-
-                  {paymentStatus === "failed" && (
-                    <p style={styles.error}>
-                      Payment failed. You can try again using
-                      M-Pesa.
-                    </p>
-                  )}
-
-                  {paymentStatus === "cancelled" && (
-                    <p style={styles.muted}>
-                      Payment was cancelled. You can initiate
-                      another payment.
-                    </p>
-                  )}
-
-                  {canPay && (
+                  {requestFilter !== "all" ? (
                     <button
                       type="button"
-                      onClick={() => handlePayNow(request)}
-                      disabled={payingRequestId === request.id}
-                      style={{
-                        ...styles.button,
-                        marginTop: "12px",
-                        opacity:
-                          payingRequestId === request.id
-                            ? 0.7
-                            : 1,
-                      }}
+                      className="mi-inline-link mi-clear-filter"
+                      onClick={() => setRequestFilter("all")}
                     >
-                      {payingRequestId === request.id
-                        ? "Initiating payment..."
-                        : paymentStatus === "failed" ||
-                            paymentStatus === "cancelled"
-                          ? "Try M-Pesa Again"
-                          : "Pay Now with M-Pesa"}
+                      View all requests
                     </button>
+                  ) : (
+                    <a
+                      href="#new-request"
+                      className="mi-inline-link"
+                    >
+                      Submit your first request
+                    </a>
                   )}
-                </article>
-              );
-            })
-          )}
-        </section>
-      </main>
+                </div>
+              ) : (
+                <div className="mi-request-list">
+                  {filteredRequests.map((request) => {
+                    const repairCost = Number(
+                      request.repair_cost_cents
+                    );
+
+                    const paymentStatus = request.payment_status;
+
+                    const canPay =
+                      request.status === "completed" &&
+                      request.responsible_party === "tenant" &&
+                      !["paid", "pending", "processing"].includes(
+                        paymentStatus
+                      ) &&
+                      Number.isFinite(repairCost) &&
+                      repairCost > 0;
+
+                    const paymentInfo = getPaymentInfo(request);
+
+                    return (
+                      <article
+                        className="mi-request-item"
+                        key={request.id}
+                      >
+                        <div className="mi-request-body">
+                          <div className="mi-request-title-row">
+                            <h3>
+                              {formatLabel(
+                                request.category || request.title
+                              )}
+                            </h3>
+
+                            <span
+                              className={`mi-status mi-status-${String(
+                                request.status || "unknown"
+                              )
+                                .toLowerCase()
+                                .replace(/_/g, "-")}`}
+                            >
+                              {formatLabel(request.status || "Unknown")}
+                            </span>
+                          </div>
+
+                          <p className="mi-request-description">
+                            {request.description ||
+                              "No description provided."}
+                          </p>
+
+                          <div className="mi-request-meta">
+                            <span>
+                              {formatDate(request.created_at)}
+                            </span>
+
+                            <span
+                              className={`mi-priority mi-priority-${String(
+                                request.priority || "medium"
+                              ).toLowerCase()}`}
+                            >
+                              {formatLabel(request.priority || "medium")}
+                            </span>
+                          </div>
+
+                          {request.responsible_party && (
+                            <p className="mi-detail-line">
+                              Responsible party:{" "}
+                              <strong>
+                                {formatLabel(
+                                  request.responsible_party
+                                )}
+                              </strong>
+                            </p>
+                          )}
+
+                          {Number.isFinite(repairCost) &&
+                            repairCost > 0 && (
+                              <p className="mi-detail-line">
+                                Repair cost:{" "}
+                                <strong>{formatMoney(repairCost)}</strong>
+                              </p>
+                            )}
+
+                          {paymentInfo && (
+                            <div className="mi-payment-info">
+                              <span
+                                className={`mi-payment-badge ${paymentInfo.className}`}
+                              >
+                                {paymentInfo.label}
+                              </span>
+
+                              <p>{paymentInfo.description}</p>
+                            </div>
+                          )}
+
+                         {canPay && (
+  <div className="mi-payment-actions">
+    <button
+      type="button"
+      className="mi-pay-button"
+      onClick={() => handlePayNow(request)}
+      disabled={payingRequestId === request.id}
+    >
+      {payingRequestId === request.id
+        ? "Processing..."
+        : paymentStatus === "failed" ||
+            paymentStatus === "cancelled"
+          ? "Try M-Pesa Again"
+          : "Pay with M-Pesa"}
+    </button>
+
+    <button
+      type="button"
+      className="mi-pay-button mi-cash-pay-button"
+      onClick={() => handleCashPayment(request)}
+      disabled={payingRequestId === request.id}
+    >
+      {payingRequestId === request.id
+        ? "Processing..."
+        : "Pay with Cash"}
+    </button>
+  </div>
+)}
+                          <div className="mi-request-footer">
+                            <span>
+                              Request ID:{" "}
+                              {String(request.id).slice(0, 8)}
+                            </span>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </div>
+
+          <footer className="mi-footer">
+            <span>MaintainIt</span>
+            <span>Making property maintenance simpler.</span>
+          </footer>
+        </main>
+      </div>
     </div>
   );
 }

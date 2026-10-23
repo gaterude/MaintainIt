@@ -5,6 +5,8 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import ManageRequests from "./pages/admin/ManageRequests";
 import AssignFundis from "./pages/admin/AssignFundis";
 import FundiDashboard from "./pages/fundi/FundiDashboard";
+import Register from "./pages/Register";
+import TenantAssignments from "./pages/admin/TenantAssignments";
 
 function PlaceholderPage({ title, description }) {
 return (
@@ -20,7 +22,7 @@ fontFamily: "Arial, sans-serif",
 function App() {
 return ( <BrowserRouter> <Routes>
 <Route path="/login" element={<Login />} />
-
+<Route path="/register" element={<Register />} />
 
     <Route
       path="/tenant/dashboard"
@@ -41,6 +43,10 @@ return ( <BrowserRouter> <Routes>
       path="/admin/assignments"
       element={<AssignFundis />}
     />
+    <Route
+  path="/admin/tenant-assignments"
+  element={<TenantAssignments />}
+/>
 
     <Route
       path="/fundi/dashboard"

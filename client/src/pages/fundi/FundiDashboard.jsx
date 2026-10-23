@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiRequest from "../../services/api";
-import { styles, getStatusStyle } from "../../styles";
+import { getStatusStyle } from "../../styles";
+import "./FundiDashboard.css";
 
 function FundiDashboard() {
   const navigate = useNavigate();
 
   const [jobs, setJobs] = useState([]);
+  const [activeFilter, setActiveFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [busyJobId, setBusyJobId] = useState(null);
   const [message, setMessage] = useState("");
@@ -84,10 +86,51 @@ function FundiDashboard() {
       setBusyJobId(null);
     }
   }
+  async function handleConfirmCash(job) {
+    if (!job.payment_id) {
+      setError("Payment details are unavailable. Refresh your jobs and try again.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Confirm that you have received the cash payment for this completed job?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setBusyJobId(job.maintenance_request_id);
+    setMessage("");
+    setError("");
+
+    try {
+      const data = await apiRequest(
+        `/payments/cash/${job.payment_id}/confirm`,
+        {
+          method: "POST",
+          body: JSON.stringify({}),
+        }
+      );
+
+      setMessage(
+        data.message || "Cash payment confirmed successfully."
+      );
+
+      await loadJobs();
+    } catch (err) {
+      setError(
+        err.message || "Unable to confirm the cash payment."
+      );
+    } finally {
+      setBusyJobId(null);
+    }
+  }
 
   function handleLogout() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+
     navigate("/login", { replace: true });
   }
 
@@ -99,6 +142,26 @@ function FundiDashboard() {
     return category
       .replace(/_/g, " ")
       .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
+  function formatStatus(status) {
+    return (status || "unknown")
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
+  function formatDate(date) {
+    if (!date) {
+      return "Date not available";
+    }
+
+    const parsedDate = new Date(date);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return "Date not available";
+    }
+
+    return parsedDate.toLocaleString();
   }
 
   const assignedCount = jobs.filter(
@@ -113,225 +176,451 @@ function FundiDashboard() {
     (job) => job.status === "completed"
   ).length;
 
-  return (
-    <div style={styles.page}>
-      <header style={styles.header}>
-        <div>
-          <h1 style={styles.brand}>MaintainIt</h1>
-          <p style={styles.muted}>Fundi Dashboard</p>
-        </div>
+  const filteredJobs =
+    activeFilter === "all"
+      ? jobs
+      : jobs.filter((job) => job.status === activeFilter);
 
-        <button
-          type="button"
-          style={styles.secondaryButton}
-          onClick={handleLogout}
-        >
-          Logout
-        </button>
+  function selectFilter(filter) {
+    setActiveFilter(filter);
+
+    window.setTimeout(() => {
+      document
+        .getElementById("fundi-jobs")
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+    }, 0);
+  }
+
+  const filterHeading =
+    activeFilter === "assigned"
+      ? "Assigned Jobs"
+      : activeFilter === "in_progress"
+        ? "Jobs In Progress"
+        : activeFilter === "completed"
+          ? "Completed Jobs"
+          : "My Maintenance Jobs";
+
+  return (
+    <div className="fundi-page">
+      <header className="fundi-header">
+        <div className="fundi-header-inner">
+          <div className="fundi-brand">
+            <span className="fundi-brand-icon">M</span>
+
+            <div>
+              <h1>MaintainIt</h1>
+              <p>Maintenance management</p>
+            </div>
+          </div>
+
+          <div className="fundi-header-actions">
+            <span className="fundi-user-label">
+              {user?.name || "Fundi"}
+            </span>
+
+            <button
+              type="button"
+              className="fundi-logout-button"
+              onClick={handleLogout}
+            >
+              Logout
+            </button>
+          </div>
+        </div>
       </header>
 
-      <main style={styles.container}>
-        <section style={styles.welcome}>
-          <h2>Welcome, {user?.name || "Fundi"}</h2>
+      <main className="fundi-main">
+        <section className="fundi-welcome">
+          <div>
+            <span className="fundi-eyebrow">
+              FUNDI WORKSPACE
+            </span>
 
-          <p style={styles.muted}>
-            View your assigned maintenance jobs and update their
-            progress.
-          </p>
+            <h2>Welcome back, {user?.name || "Fundi"}</h2>
+
+            <p>
+              Keep track of your assigned maintenance jobs and
+              update their progress from one place.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="fundi-refresh-button"
+            onClick={loadJobs}
+            disabled={loading}
+          >
+            {loading ? "Refreshing..." : "Refresh jobs"}
+          </button>
         </section>
 
         {message && (
-          <div role="status" style={styles.message}>
+          <div
+            className="fundi-alert fundi-alert-success"
+            role="status"
+          >
             {message}
           </div>
         )}
 
         {error && (
-          <div role="alert" style={styles.error}>
+          <div
+            className="fundi-alert fundi-alert-error"
+            role="alert"
+          >
             {error}
           </div>
         )}
 
-        <section style={styles.grid}>
-          <div style={styles.card}>
-            <p style={styles.muted}>Assigned</p>
-            <h2 style={styles.statNumber}>{assignedCount}</h2>
-          </div>
+        <section className="fundi-stats">
+          <button
+            type="button"
+            className={`fundi-stat-card fundi-stat-button ${
+              activeFilter === "assigned"
+                ? "fundi-stat-active"
+                : ""
+            }`}
+            onClick={() => selectFilter("assigned")}
+            aria-pressed={activeFilter === "assigned"}
+          >
+            <div className="fundi-stat-top">
+              <span className="fundi-stat-caption">
+                Awaiting action
+              </span>
+            </div>
 
-          <div style={styles.card}>
-            <p style={styles.muted}>In progress</p>
-            <h2 style={styles.statNumber}>{inProgressCount}</h2>
-          </div>
+            <p className="fundi-stat-label">Assigned jobs</p>
 
-          <div style={styles.card}>
-            <p style={styles.muted}>Completed</p>
-            <h2 style={styles.statNumber}>{completedCount}</h2>
-          </div>
+            <h3>{assignedCount}</h3>
+
+            <div className="fundi-stat-footer">
+              Jobs waiting for you to accept
+            </div>
+          </button>
+
+          <button
+            type="button"
+            className={`fundi-stat-card fundi-stat-button ${
+              activeFilter === "in_progress"
+                ? "fundi-stat-active"
+                : ""
+            }`}
+            onClick={() => selectFilter("in_progress")}
+            aria-pressed={activeFilter === "in_progress"}
+          >
+            <div className="fundi-stat-top">
+              <span className="fundi-stat-caption">
+                In progress
+              </span>
+            </div>
+
+            <p className="fundi-stat-label">Active jobs</p>
+
+            <h3>{inProgressCount}</h3>
+
+            <div className="fundi-stat-footer">
+              Jobs currently being handled
+            </div>
+          </button>
+
+          <button
+            type="button"
+            className={`fundi-stat-card fundi-stat-button ${
+              activeFilter === "completed"
+                ? "fundi-stat-active"
+                : ""
+            }`}
+            onClick={() => selectFilter("completed")}
+            aria-pressed={activeFilter === "completed"}
+          >
+            <div className="fundi-stat-top">
+              <span className="fundi-stat-caption">
+                Finished
+              </span>
+            </div>
+
+            <p className="fundi-stat-label">Completed jobs</p>
+
+            <h3>{completedCount}</h3>
+
+            <div className="fundi-stat-footer">
+              Successfully completed jobs
+            </div>
+          </button>
         </section>
 
-        <section style={{ marginTop: "30px" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: "12px",
-              flexWrap: "wrap",
-            }}
-          >
-            <h2 style={styles.sectionTitle}>
-              My Maintenance Jobs
-            </h2>
+        <section
+          className="fundi-jobs-section"
+          id="fundi-jobs"
+        >
+          <div className="fundi-section-heading">
+            <div>
+              <span className="fundi-eyebrow">YOUR WORK</span>
 
-            <button
-              type="button"
-              style={styles.secondaryButton}
-              onClick={loadJobs}
-              disabled={loading}
-            >
-              {loading ? "Refreshing..." : "Refresh jobs"}
-            </button>
+              <h2>{filterHeading}</h2>
+
+              <p>
+                Review job details and take action on your assignments.
+              </p>
+            </div>
+
+            <div className="fundi-heading-actions">
+              <span className="fundi-total-badge">
+                {filteredJobs.length}{" "}
+                {filteredJobs.length === 1 ? "job" : "jobs"}
+              </span>
+
+              {activeFilter !== "all" && (
+                <button
+                  type="button"
+                  className="fundi-refresh-button"
+                  onClick={() => selectFilter("all")}
+                >
+                  View all jobs
+                </button>
+              )}
+            </div>
           </div>
 
           {loading ? (
-            <p style={styles.muted}>Loading your jobs...</p>
-          ) : jobs.length === 0 ? (
-            <div style={styles.card}>
-              <p style={styles.muted}>
-                No maintenance jobs have been assigned to you yet.
+            <div className="fundi-state-card">
+              <div className="fundi-loading-spinner" />
+
+              <h3>Loading your jobs</h3>
+
+              <p>
+                Please wait while we retrieve your assignments.
               </p>
             </div>
+          ) : filteredJobs.length === 0 ? (
+            <div className="fundi-state-card">
+              <h3>
+                {activeFilter === "all"
+                  ? "No assigned jobs yet"
+                  : `No ${formatStatus(activeFilter).toLowerCase()} jobs`}
+              </h3>
+
+              <p>
+                {activeFilter === "all"
+                  ? "New maintenance assignments will appear here when the admin assigns work to you."
+                  : "There are currently no jobs in this category."}
+              </p>
+
+              {activeFilter !== "all" ? (
+                <button
+                  type="button"
+                  className="fundi-primary-button"
+                  onClick={() => selectFilter("all")}
+                >
+                  View all jobs
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="fundi-primary-button"
+                  onClick={loadJobs}
+                >
+                  Check for jobs
+                </button>
+              )}
+            </div>
           ) : (
-            <div style={{ display: "grid", gap: "16px" }}>
-              {jobs.map((job) => {
+            <div className="fundi-job-list">
+              {filteredJobs.map((job, index) => {
                 const isBusy =
                   busyJobId === job.maintenance_request_id;
 
+                const issueNumber = String(index + 1).padStart(
+                  3,
+                  "0"
+                );
+
                 return (
                   <article
-                    key={job.assignment_id}
-                    style={styles.requestCard}
+                    className="fundi-job-card"
+                    key={
+                      job.assignment_id ||
+                      job.maintenance_request_id
+                    }
                   >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                        gap: "12px",
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      <h3 style={{ marginTop: 0 }}>
-                        {formatCategory(
-                          job.category || job.title
-                        )}
-                      </h3>
+                    <div className="fundi-job-card-header">
+                      <div className="fundi-job-title-group">
+                        <div>
+                          <h3>
+                            {formatCategory(
+                              job.category || job.title
+                            )}
+                          </h3>
 
-                      <span style={getStatusStyle(job.status)}>
-                        {(job.status || "unknown").replace(
-                          /_/g,
-                          " "
-                        )}
+                          <p className="fundi-job-reference">
+                            Issue #{issueNumber}
+                          </p>
+                        </div>
+                      </div>
+
+                      <span
+                        className="fundi-status-badge"
+                        style={getStatusStyle(job.status)}
+                      >
+                        {formatStatus(job.status)}
                       </span>
                     </div>
 
-                    <p>
-                      <strong>Description:</strong>{" "}
-                      {job.description ||
-                        "No description provided."}
-                    </p>
+                    <div className="fundi-job-description">
+                      <span className="fundi-detail-label">
+                        Issue description
+                      </span>
 
-                    <p>
-                      <strong>Property:</strong>{" "}
-                      {job.property_name || "Not available"}
-                    </p>
-
-                    <p>
-                      <strong>Address:</strong>{" "}
-                      {job.property_address || "Not available"}
-                    </p>
-
-                    <p>
-                      <strong>Room:</strong>{" "}
-                      {job.room_number || "Not available"}
-                    </p>
-
-                    <p style={styles.muted}>
-                      Assigned:{" "}
-                      {job.assigned_at
-                        ? new Date(
-                            job.assigned_at
-                          ).toLocaleString()
-                        : "Date not available"}
-                    </p>
-
-                    {job.accepted_at && (
-                      <p style={styles.muted}>
-                        Accepted:{" "}
-                        {new Date(
-                          job.accepted_at
-                        ).toLocaleString()}
+                      <p>
+                        {job.description ||
+                          "No description provided."}
                       </p>
-                    )}
+                    </div>
 
-                    {job.completed_at && (
-                      <p style={styles.muted}>
-                        Completed:{" "}
-                        {new Date(
-                          job.completed_at
-                        ).toLocaleString()}
-                      </p>
-                    )}
+                    <div className="fundi-job-details">
+                      <div className="fundi-detail-item">
+                        <div>
+                          <span className="fundi-detail-label">
+                            Property
+                          </span>
 
-                    {job.status === "assigned" && (
-                      <button
-                        type="button"
-                        style={styles.button}
-                        onClick={() =>
-                          handleJobAction(
-                            job.maintenance_request_id,
-                            "accept"
-                          )
-                        }
-                        disabled={
-                          isBusy || busyJobId !== null
-                        }
-                      >
-                        {isBusy ? "Processing..." : "Accept Job"}
-                      </button>
-                    )}
+                          <p>
+                            {job.property_name || "Not available"}
+                          </p>
+                        </div>
+                      </div>
 
-                    {job.status === "in_progress" && (
-                      <button
-                        type="button"
-                        style={styles.button}
-                        onClick={() =>
-                          handleJobAction(
-                            job.maintenance_request_id,
-                            "complete"
-                          )
-                        }
-                        disabled={
-                          isBusy || busyJobId !== null
-                        }
-                      >
-                        {isBusy
-                          ? "Processing..."
-                          : "Mark as Completed"}
-                      </button>
-                    )}
+                      <div className="fundi-detail-item">
+                        <div>
+                          <span className="fundi-detail-label">
+                            Address
+                          </span>
 
-                    {job.status === "completed" && (
-                      <p style={styles.muted}>
-                        This job has been completed.
-                      </p>
-                    )}
+                          <p>
+                            {job.property_address || "Not available"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="fundi-detail-item">
+                        <div>
+                          <span className="fundi-detail-label">
+                            Room
+                          </span>
+
+                          <p>
+                            {job.room_number || "Not available"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="fundi-job-card-footer">
+                      <div className="fundi-job-dates">
+                        <p>
+                          <strong>Assigned:</strong>{" "}
+                          {formatDate(job.assigned_at)}
+                        </p>
+
+                        {job.accepted_at && (
+                          <p>
+                            <strong>Accepted:</strong>{" "}
+                            {formatDate(job.accepted_at)}
+                          </p>
+                        )}
+
+                        {job.completed_at && (
+                          <p>
+                            <strong>Completed:</strong>{" "}
+                            {formatDate(job.completed_at)}
+                          </p>
+                        )}
+                      </div>
+<div className="fundi-job-actions">
+  {job.payment_method === "cash" && (
+    <div className="fundi-cash-payment-info">
+      <span>
+        Cash payment: {formatStatus(job.payment_status)}
+      </span>
+
+      {job.payment_status === "pending" && (
+        <button
+          type="button"
+          className="fundi-primary-button"
+          onClick={() => handleConfirmCash(job)}
+          disabled={busyJobId !== null}
+        >
+          {isBusy
+            ? "Confirming..."
+            : "Confirm Cash Received"}
+        </button>
+      )}
+
+      {job.payment_status === "paid" && (
+        <span className="fundi-completed-label">
+          Cash payment confirmed
+        </span>
+      )}
+    </div>
+  )}
+
+  {job.status === "assigned" && (
+    <button
+      type="button"
+      className="fundi-primary-button"
+      onClick={() =>
+        handleJobAction(
+          job.maintenance_request_id,
+          "accept"
+        )
+      }
+      disabled={isBusy || busyJobId !== null}
+    >
+      {isBusy ? "Processing..." : "Accept job"}
+    </button>
+  )}
+
+  {job.status === "in_progress" && (
+    <button
+      type="button"
+      className="fundi-primary-button"
+      onClick={() =>
+        handleJobAction(
+          job.maintenance_request_id,
+          "complete"
+        )
+      }
+      disabled={isBusy || busyJobId !== null}
+    >
+      {isBusy ? "Processing..." : "Mark as completed"}
+    </button>
+  )}
+
+  {job.status === "completed" && (
+    <span className="fundi-completed-label">
+      Job completed
+    </span>
+  )}
+</div>
+
+                    
+                     
+
+                    </div>
                   </article>
                 );
               })}
             </div>
           )}
         </section>
+
+        <footer className="fundi-footer">
+          <span>MaintainIt</span>
+          <span>Maintenance management made simpler.</span>
+        </footer>
       </main>
     </div>
   );

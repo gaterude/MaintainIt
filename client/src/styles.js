@@ -1,213 +1,239 @@
+const colors = {
+  primary: "#203b56",
+  primaryHover: "#172d43",
+  accent: "#28745b",
+  accentHover: "#205d49",
+  background: "#f4f6f8",
+  surface: "#ffffff",
+  text: "#263445",
+  muted: "#6b7787",
+  border: "#e1e6eb",
+};
+
 export const styles = {
-page: {
-minHeight: "100vh",
-backgroundColor: "#f4f6f9",
-color: "#202938",
-fontFamily: "Arial, sans-serif",
-},
+  page: {
+    minHeight: "100vh",
+    backgroundColor: colors.background,
+    color: colors.text,
+    fontFamily: '"Segoe UI", Arial, sans-serif',
+  },
 
-header: {
-backgroundColor: "#ffffff",
-borderBottom: "1px solid #e5e7eb",
-padding: "18px 6%",
-display: "flex",
-justifyContent: "space-between",
-alignItems: "center",
-flexWrap: "wrap",
-gap: "15px",
-},
+  header: {
+    backgroundColor: colors.surface,
+    borderBottom: `1px solid ${colors.border}`,
+    padding: "16px 6%",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: "15px",
+  },
 
-brand: {
-margin: 0,
-fontSize: "25px",
-color: "#176b55",
-},
+  brand: {
+    margin: 0,
+    fontSize: "25px",
+    fontWeight: 700,
+    letterSpacing: "-0.5px",
+    color: colors.primary,
+  },
 
-container: {
-maxWidth: "1100px",
-margin: "0 auto",
-padding: "30px 20px",
-},
+  container: {
+    width: "100%",
+    maxWidth: "1160px",
+    margin: "0 auto",
+    padding: "32px 24px",
+    boxSizing: "border-box",
+  },
 
-welcome: {
-marginBottom: "25px",
-},
+  welcome: {
+    marginBottom: "26px",
+  },
 
-muted: {
-color: "#687386",
-lineHeight: 1.6,
-},
+  muted: {
+    color: colors.muted,
+    lineHeight: 1.6,
+  },
 
-grid: {
-display: "grid",
-gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
-gap: "18px",
-marginBottom: "28px",
-},
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+    gap: "18px",
+    marginBottom: "28px",
+  },
 
-card: {
-backgroundColor: "#ffffff",
-padding: "22px",
-borderRadius: "10px",
-border: "1px solid #e5e7eb",
-marginBottom: "22px",
-},
+  card: {
+    backgroundColor: colors.surface,
+    padding: "24px",
+    borderRadius: "10px",
+    border: `1px solid ${colors.border}`,
+    marginBottom: "22px",
+  },
 
-statNumber: {
-fontSize: "30px",
-fontWeight: "bold",
-margin: "10px 0 0",
-color: "#176b55",
-},
+  statNumber: {
+    fontSize: "32px",
+    fontWeight: 700,
+    margin: "8px 0 0",
+    color: colors.primary,
+  },
 
-sectionTitle: {
-marginTop: 0,
-marginBottom: "18px",
-fontSize: "21px",
-},
+  sectionTitle: {
+    marginTop: 0,
+    marginBottom: "18px",
+    fontSize: "21px",
+    fontWeight: 650,
+    color: colors.primary,
+  },
 
-label: {
-display: "block",
-marginBottom: "8px",
-fontWeight: "bold",
-fontSize: "14px",
-},
+  label: {
+    display: "block",
+    marginBottom: "7px",
+    fontWeight: 600,
+    fontSize: "14px",
+    color: colors.text,
+  },
 
-input: {
-width: "100%",
-boxSizing: "border-box",
-padding: "12px",
-border: "1px solid #d1d5db",
-borderRadius: "6px",
-fontSize: "15px",
-marginBottom: "18px",
-backgroundColor: "#ffffff",
-color: "#202938",
-caretColor: "#176b55",
-colorScheme: "light",
-},
+  input: {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "12px 13px",
+    border: `1px solid #cbd3dc`,
+    borderRadius: "7px",
+    fontSize: "14px",
+    marginBottom: "18px",
+    backgroundColor: colors.surface,
+    color: colors.text,
+    caretColor: colors.accent,
+    colorScheme: "light",
+  },
 
-textarea: {
-width: "100%",
-minHeight: "120px",
-boxSizing: "border-box",
-padding: "12px",
-border: "1px solid #d1d5db",
-borderRadius: "6px",
-fontSize: "15px",
-resize: "vertical",
-fontFamily: "Arial, sans-serif",
-marginBottom: "18px",
-},
+  textarea: {
+    width: "100%",
+    minHeight: "120px",
+    boxSizing: "border-box",
+    padding: "12px 13px",
+    border: "1px solid #cbd3dc",
+    borderRadius: "7px",
+    fontSize: "14px",
+    resize: "vertical",
+    fontFamily: '"Segoe UI", Arial, sans-serif',
+    marginBottom: "18px",
+    backgroundColor: colors.surface,
+    color: colors.text,
+  },
 
-button: {
-backgroundColor: "#176b55",
-color: "#ffffff",
-border: "none",
-borderRadius: "6px",
-padding: "12px 18px",
-fontSize: "14px",
-fontWeight: "bold",
-cursor: "pointer",
-},
+  button: {
+    backgroundColor: colors.primary,
+    color: "#ffffff",
+    border: `1px solid ${colors.primary}`,
+    borderRadius: "7px",
+    padding: "11px 18px",
+    fontSize: "14px",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
 
-secondaryButton: {
-backgroundColor: "#ffffff",
-color: "#176b55",
-border: "1px solid #176b55",
-borderRadius: "6px",
-padding: "10px 15px",
-fontSize: "14px",
-fontWeight: "bold",
-cursor: "pointer",
-},
+  secondaryButton: {
+    backgroundColor: colors.surface,
+    color: colors.primary,
+    border: `1px solid #cbd3dc`,
+    borderRadius: "7px",
+    padding: "10px 15px",
+    fontSize: "14px",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
 
-roomGrid: {
-display: "grid",
-gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-gap: "18px",
-},
+  roomGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: "22px",
+  },
 
-roomLabel: {
-color: "#687386",
-fontSize: "13px",
-marginBottom: "7px",
-},
+  roomLabel: {
+    color: colors.muted,
+    fontSize: "13px",
+    marginBottom: "6px",
+  },
 
-roomValue: {
-fontSize: "16px",
-fontWeight: "bold",
-overflowWrap: "anywhere",
-},
+  roomValue: {
+    fontSize: "16px",
+    fontWeight: 600,
+    color: colors.primary,
+    overflowWrap: "anywhere",
+  },
 
-requestCard: {
-backgroundColor: "#ffffff",
-padding: "20px",
-borderRadius: "9px",
-border: "1px solid #e5e7eb",
-marginTop: "14px",
-},
+  requestCard: {
+    backgroundColor: colors.surface,
+    padding: "22px",
+    borderRadius: "10px",
+    border: `1px solid ${colors.border}`,
+    marginTop: "14px",
+    marginBottom: "16px",
+  },
 
-message: {
-padding: "13px 15px",
-backgroundColor: "#e9f6ef",
-color: "#176b45",
-borderRadius: "6px",
-marginBottom: "20px",
-},
+  message: {
+    padding: "13px 16px",
+    backgroundColor: "#e8f4ed",
+    color: "#216344",
+    border: "1px solid #c9e5d3",
+    borderRadius: "7px",
+    marginBottom: "20px",
+  },
 
-error: {
-padding: "13px 15px",
-backgroundColor: "#fff0f0",
-color: "#a12626",
-borderRadius: "6px",
-marginBottom: "20px",
-},
+  error: {
+    padding: "13px 16px",
+    backgroundColor: "#fff0f0",
+    color: "#a12626",
+    border: "1px solid #f2cccc",
+    borderRadius: "7px",
+    marginBottom: "20px",
+  },
 
-loginPage: {
-minHeight: "100vh",
-backgroundColor: "#f4f6f9",
-display: "flex",
-justifyContent: "center",
-alignItems: "center",
-padding: "20px",
-boxSizing: "border-box",
-},
+  loginPage: {
+    minHeight: "100vh",
+    backgroundColor: colors.background,
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: "20px",
+    boxSizing: "border-box",
+  },
 
-loginCard: {
-width: "100%",
-maxWidth: "400px",
-backgroundColor: "#ffffff",
-padding: "32px",
-borderRadius: "12px",
-border: "1px solid #e5e7eb",
-boxSizing: "border-box",
-},
+  loginCard: {
+    width: "100%",
+    maxWidth: "410px",
+    backgroundColor: colors.surface,
+    padding: "32px",
+    borderRadius: "10px",
+    border: `1px solid ${colors.border}`,
+    boxSizing: "border-box",
+  },
 };
 
 export function getStatusStyle(status) {
-const colors = {
-pending: { background: "#fff4d6", color: "#875b00" },
-approved: { background: "#e0edff", color: "#1d4f91" },
-assigned: { background: "#eee5ff", color: "#6536a3" },
-in_progress: { background: "#dff5f2", color: "#12675e" },
-completed: { background: "#dff5e5", color: "#216e39" },
-cancelled: { background: "#fee2e2", color: "#991b1b" },
-};
+  const statusColors = {
+    pending: { background: "#fff4d6", color: "#875b00" },
+    approved: { background: "#e5edfb", color: "#28558a" },
+    assigned: { background: "#eee8fa", color: "#6941a5" },
+    in_progress: { background: "#dff2ef", color: "#17685e" },
+    completed: { background: "#e1f3e6", color: "#216e39" },
+    cancelled: { background: "#fee8e7", color: "#a12c2c" },
+  };
 
-const selected = colors[status] || {
-background: "#eeeeee",
-color: "#444444",
-};
+  const selected = statusColors[status] || {
+    background: "#edf0f3",
+    color: "#4b5563",
+  };
 
-return {
-display: "inline-block",
-backgroundColor: selected.background,
-color: selected.color,
-padding: "6px 10px",
-borderRadius: "20px",
-fontSize: "12px",
-fontWeight: "bold",
-textTransform: "capitalize",
-};
+  return {
+    display: "inline-block",
+    backgroundColor: selected.background,
+    color: selected.color,
+    padding: "6px 11px",
+    borderRadius: "6px",
+    fontSize: "12px",
+    fontWeight: 650,
+    textTransform: "capitalize",
+    whiteSpace: "nowrap",
+  };
 }
