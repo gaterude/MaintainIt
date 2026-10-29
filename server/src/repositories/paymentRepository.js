@@ -126,7 +126,8 @@ async function findUnresolvedPayments(limit = 100) {
        updated_at
      FROM payments
      WHERE status IN ('pending', 'processing')
-     ORDER BY created_at ASC
+       AND payment_method = 'mpesa'
+ORDER BY created_at ASC
      LIMIT $1`,
     [safeLimit]
   );
@@ -188,12 +189,14 @@ async function markPaymentFailed(paymentId) {
          updated_at = NOW()
      WHERE id = $1
        AND status IN ('pending', 'processing')
+       AND payment_method = 'mpesa'
      RETURNING *`,
     [paymentId]
   );
 
   return result.rows[0] || null;
 }
+
 async function confirmCashPayment({ paymentId, fundiId }) {
   const client = await pool.connect();
 

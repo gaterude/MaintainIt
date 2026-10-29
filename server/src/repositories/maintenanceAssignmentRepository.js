@@ -250,6 +250,29 @@ async function completeAssignment(
 
   try {
     await client.query("BEGIN");
+    // A job can only be completed after the tenant confirms
+    // the latest proposed appointment.
+    const appointmentResult = await client.query(
+      `
+      SELECT id, status
+      FROM maintenance_appointments
+      WHERE maintenance_request_id = $1
+      ORDER BY created_at DESC, updated_at DESC
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [requestId]
+    );
+
+    if (
+      appointmentResult.rows.length === 0 ||
+      appointmentResult.rows[0].status !== "confirmed"
+    ) {
+      throw new Error(
+        "A confirmed appointment is required before completing this job"
+      );
+    }
+
 
     const assignmentResult = await client.query(
       `

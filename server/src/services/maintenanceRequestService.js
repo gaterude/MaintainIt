@@ -158,7 +158,6 @@ await maintenanceRequestRepository.findTenantByUserId(
 userId
 );
 
-```
 if (!tenant) {
   return null;
 }
@@ -173,7 +172,6 @@ if (!request || request.tenant_id !== tenant.id) {
 }
 
 return request;
-```
 
 }
 

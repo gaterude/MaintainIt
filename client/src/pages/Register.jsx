@@ -128,7 +128,6 @@ return ( <div style={styles.loginPage}> <div style={styles.loginCard}>
 <h1 style={{ ...styles.brand, marginBottom: "8px" }}>
 MaintainIt </h1>
 
-```
     <p style={styles.muted}>
       Maintenance management made simple.
     </p>

@@ -231,12 +231,40 @@ async function querySTKPushStatus(checkoutRequestId) {
     throw new Error("Could not connect to the M-Pesa STK Query service");
   }
 
-  let data;
+    let data;
 
   try {
     data = await response.json();
   } catch {
-    throw new Error("M-Pesa STK Query returned an unreadable response");
+    throw new Error(
+      "M-Pesa STK Query returned an unreadable response"
+    );
+  }
+
+  if (!response.ok) {
+  console.error("M-Pesa STK Query HTTP error:", {
+    httpStatus: response.status,
+    responseData: data,
+  });
+
+  const error = new Error(
+    "M-Pesa STK Query request was unsuccessful"
+  );
+
+  error.httpStatus = response.status;
+  error.responseData = data;
+
+  throw error;
+}
+
+  if (
+    !data ||
+    typeof data !== "object" ||
+    Array.isArray(data)
+  ) {
+    throw new Error(
+      "M-Pesa STK Query returned an invalid response"
+    );
   }
 
   return {
@@ -244,6 +272,7 @@ async function querySTKPushStatus(checkoutRequestId) {
     data,
   };
 }
+
 
 async function initiatePayment({
   requestId,
@@ -486,19 +515,17 @@ async function handleCallback(callbackData) {
   }
 
   const checkoutRequestId = stkCallback.CheckoutRequestID;
-  const resultCode = Number(stkCallback.ResultCode);
 
   if (
     typeof checkoutRequestId !== "string" ||
-    !checkoutRequestId.trim() ||
-    !Number.isInteger(resultCode)
+    !checkoutRequestId.trim()
   ) {
     throw new Error("Invalid M-Pesa callback details");
   }
 
   const payment =
     await paymentRepository.findPaymentByCheckoutRequestId(
-      checkoutRequestId
+      checkoutRequestId.trim()
     );
 
   if (!payment) {
@@ -507,12 +534,45 @@ async function handleCallback(callbackData) {
     );
   }
 
-  if (payment.status === "paid") {
+  if (payment.payment_method !== "mpesa") {
+    throw new Error("Checkout does not belong to an M-Pesa payment");
+  }
+
+  if (payment.status === "paid" || payment.status === "failed") {
     return payment;
   }
 
-  if (resultCode !== 0) {
-    return paymentRepository.markPaymentFailed(payment.id);
+  // Never trust the public callback alone to determine payment status.
+  // Verify the checkout independently with Safaricom.
+  const queryResult = await querySTKPushStatus(
+    checkoutRequestId.trim()
+  );
+
+  const queryData = queryResult?.data;
+
+  if (
+    queryResult.httpStatus < 200 ||
+    queryResult.httpStatus >= 300 ||
+    !queryData ||
+    queryData.ResponseCode !== "0" ||
+    String(queryData.CheckoutRequestID || "") !==
+      checkoutRequestId.trim() ||
+    queryData.ResultCode === undefined ||
+    !Number.isInteger(Number(queryData.ResultCode))
+  ) {
+    throw new Error(
+      "Safaricom could not independently confirm the payment result. Payment status remains unchanged."
+    );
+  }
+
+  const verifiedResultCode = Number(queryData.ResultCode);
+
+  if (verifiedResultCode !== 0) {
+    // A nonzero result can include an unresolved or failed outcome.
+    // Leave it for reconciliation instead of guessing.
+    throw new Error(
+      "Safaricom has not confirmed a successful payment. Payment status remains unchanged."
+    );
   }
 
   const metadata = stkCallback.CallbackMetadata?.Item || [];

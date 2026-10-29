@@ -13,6 +13,9 @@ function FundiDashboard() {
   const [busyJobId, setBusyJobId] = useState(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [appointments, setAppointments] = useState([]);
+  const [appointmentDates, setAppointmentDates] = useState({});
+  const [appointmentError, setAppointmentError] = useState("");
 
   const [user] = useState(() =>
     JSON.parse(localStorage.getItem("user") || "null")
@@ -30,6 +33,22 @@ function FundiDashboard() {
       setJobs(
         Array.isArray(data.assignments) ? data.assignments : []
       );
+      try {
+        const appointmentData = await apiRequest("/appointments/my-jobs");
+
+        setAppointments(
+          Array.isArray(appointmentData.appointments)
+            ? appointmentData.appointments
+            : []
+        );
+
+        setAppointmentError("");
+      } catch (appointmentLoadError) {
+        setAppointmentError(
+          appointmentLoadError.message ||
+            "Unable to load appointment information."
+        );
+      }
     } catch (err) {
       setError(err.message || "Unable to load your jobs.");
     } finally {
@@ -82,6 +101,104 @@ function FundiDashboard() {
       await loadJobs();
     } catch (err) {
       setError(err.message || "Unable to update this job.");
+    } finally {
+      setBusyJobId(null);
+    }
+  }
+  function formatAppointmentDate(value) {
+    if (!value) return "Not scheduled";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return "Date unavailable";
+    }
+
+    return new Intl.DateTimeFormat("en-KE", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(date);
+  }
+
+  function getLatestAppointment(requestId) {
+    return (
+      appointments
+        .filter(
+          (appointment) =>
+            appointment.maintenance_request_id === requestId
+        )
+        .sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() -
+            new Date(a.created_at).getTime()
+        )[0] || null
+    );
+  }
+
+  async function handleAppointmentSubmit(job) {
+    const requestId = job.maintenance_request_id;
+    const selectedDateTime = appointmentDates[requestId];
+
+    if (!selectedDateTime) {
+      setAppointmentError("Choose a proposed visit date and time.");
+      return;
+    }
+
+    const proposedDate = new Date(selectedDateTime);
+
+    if (
+      Number.isNaN(proposedDate.getTime()) ||
+      proposedDate.getTime() <= Date.now()
+    ) {
+      setAppointmentError(
+        "The proposed visit date and time must be in the future."
+      );
+      return;
+    }
+
+    const existingAppointment = getLatestAppointment(requestId);
+    const isReschedule =
+      existingAppointment?.status === "reschedule_requested";
+
+    setBusyJobId(requestId);
+    setMessage("");
+    setError("");
+    setAppointmentError("");
+
+    try {
+      const proposedVisitAt = proposedDate.toISOString();
+
+      const endpoint = isReschedule
+        ? `/appointments/${existingAppointment.id}/reschedule`
+        : "/appointments";
+
+      const body = isReschedule
+        ? { proposedVisitAt }
+        : { requestId, proposedVisitAt };
+
+      const data = await apiRequest(endpoint, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+
+      setMessage(
+        data.message ||
+          (isReschedule
+            ? "Replacement visit time proposed successfully."
+            : "Visit time proposed successfully.")
+      );
+
+      setAppointmentDates((current) => {
+        const updated = { ...current };
+        delete updated[requestId];
+        return updated;
+      });
+
+      await loadJobs();
+    } catch (err) {
+      setAppointmentError(
+        err.message || "Unable to save the proposed visit time."
+      );
     } finally {
       setBusyJobId(null);
     }
@@ -437,6 +554,11 @@ function FundiDashboard() {
                   3,
                   "0"
                 );
+                const appointment = getLatestAppointment(
+                  job.maintenance_request_id
+                );
+
+                const hasConfirmedAppointment = appointment?.status === "confirmed";
 
                 return (
                   <article
@@ -540,6 +662,136 @@ function FundiDashboard() {
                         )}
                       </div>
 <div className="fundi-job-actions">
+  {job.status === "in_progress" && (
+    <div
+      className="fundi-appointment-panel"
+      style={{
+        width: "100%",
+        marginBottom: "16px",
+        padding: "14px",
+        border: "1px solid #dbe3ec",
+        borderRadius: "8px",
+      }}
+    >
+      <h4>Visit appointment</h4>
+
+      {appointmentError && (
+        <p role="alert" className="fundi-error">
+          {appointmentError}
+        </p>
+      )}
+
+      {appointment && appointment.status !== "cancelled" ? (
+        <>
+          <p>
+            <strong>Proposed visit:</strong>{" "}
+            {formatAppointmentDate(appointment.proposed_visit_at)}
+          </p>
+
+          <p>
+            <strong>Status:</strong>{" "}
+            {formatStatus(appointment.status)}
+          </p>
+
+          {appointment.tenant_response_note && (
+            <p>
+              <strong>Tenant note:</strong>{" "}
+              {appointment.tenant_response_note}
+            </p>
+          )}
+
+          {appointment.status === "reschedule_requested" && (
+            <>
+              <label
+                htmlFor={`appointment-${job.maintenance_request_id}`}
+              >
+                Propose a replacement date and time
+              </label>
+
+              <input
+                id={`appointment-${job.maintenance_request_id}`}
+                type="datetime-local"
+                value={appointmentDates[job.maintenance_request_id] || ""}
+                onChange={(event) =>
+                  setAppointmentDates((current) => ({
+                    ...current,
+                    [job.maintenance_request_id]: event.target.value,
+                  }))
+                }
+                disabled={busyJobId !== null}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  maxWidth: "320px",
+                  margin: "8px 0",
+                  padding: "9px",
+                }}
+              />
+
+              <button
+                type="button"
+                className="fundi-primary-button"
+                onClick={() => handleAppointmentSubmit(job)}
+                disabled={
+                  busyJobId !== null ||
+                  !appointmentDates[job.maintenance_request_id]
+                }
+              >
+                {isBusy ? "Saving..." : "Propose new time"}
+              </button>
+    {!hasConfirmedAppointment && (
+      <p role="status">
+        The tenant must confirm the appointment before this job can be completed.
+      </p>
+    )}
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <p>No visit time has been proposed yet.</p>
+
+          <label
+            htmlFor={`appointment-${job.maintenance_request_id}`}
+          >
+            Proposed visit date and time
+          </label>
+
+          <input
+            id={`appointment-${job.maintenance_request_id}`}
+            type="datetime-local"
+            value={appointmentDates[job.maintenance_request_id] || ""}
+            onChange={(event) =>
+              setAppointmentDates((current) => ({
+                ...current,
+                [job.maintenance_request_id]: event.target.value,
+              }))
+            }
+            disabled={busyJobId !== null}
+            style={{
+              display: "block",
+              width: "100%",
+              maxWidth: "320px",
+              margin: "8px 0",
+              padding: "9px",
+            }}
+          />
+
+          <button
+            type="button"
+            className="fundi-primary-button"
+            onClick={() => handleAppointmentSubmit(job)}
+            disabled={
+              busyJobId !== null ||
+              !appointmentDates[job.maintenance_request_id]
+            }
+          >
+            {isBusy ? "Saving..." : "Propose visit time"}
+          </button>
+        </>
+      )}
+    </div>
+  )}
   {job.payment_method === "cash" && (
     <div className="fundi-cash-payment-info">
       <span>
@@ -577,7 +829,7 @@ function FundiDashboard() {
           "accept"
         )
       }
-      disabled={isBusy || busyJobId !== null}
+      disabled={!hasConfirmedAppointment || isBusy || busyJobId !== null}
     >
       {isBusy ? "Processing..." : "Accept job"}
     </button>
@@ -593,9 +845,9 @@ function FundiDashboard() {
           "complete"
         )
       }
-      disabled={isBusy || busyJobId !== null}
+      disabled={!hasConfirmedAppointment || isBusy || busyJobId !== null}
     >
-      {isBusy ? "Processing..." : "Mark as completed"}
+      {isBusy ? "Processing..." : hasConfirmedAppointment ? "Mark as completed" : "Awaiting tenant confirmation"}
     </button>
   )}
 

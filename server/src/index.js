@@ -10,11 +10,18 @@ const maintenanceResponsibilityRoutes = require("./routes/maintenanceResponsibil
 const maintenanceAssignmentRoutes = require("./routes/maintenanceAssignmentRoutes");
 const maintenanceHistoryRoutes = require("./routes/maintenanceHistoryRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
+const appointmentRoutes = require("./routes/appointmentRoutes");
+const whatsappWebhookRoutes = require("./routes/whatsappWebhookRoutes");
+const whatsappPreferenceRoutes = require("./routes/whatsappPreferenceRoutes");
 const tenantAssignmentRoutes = require("./routes/tenantAssignmentRoutes");
 
 const {
-startOverdueMaintenanceScheduler,
+  startOverdueMaintenanceScheduler,
 } = require("./jobs/overdueMaintenanceScheduler");
+
+const {
+  startPaymentReconciliationScheduler,
+} = require("./jobs/paymentReconciliationScheduler");
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -45,7 +52,19 @@ allowedHeaders: ["Content-Type", "Authorization"],
 })
 );
 
-app.use(express.json({ limit: "1mb" }));
+app.use(
+  express.json({
+    limit: "1mb",
+    verify(req, res, buffer) {
+      if (
+        req.originalUrl.split("?")[0] ===
+        "/api/webhooks/whatsapp"
+      ) {
+        req.rawBody = Buffer.from(buffer);
+      }
+    },
+  })
+);
 
 app.get("/", (req, res) => {
 res.status(200).json({
@@ -59,6 +78,9 @@ app.use("/api/maintenance-requests", maintenanceRequestRoutes);
 app.use("/api/maintenance-responsibilities", maintenanceResponsibilityRoutes);
 app.use("/api/maintenance-assignments", maintenanceAssignmentRoutes);
 app.use("/api/maintenance-history", maintenanceHistoryRoutes);
+app.use("/api/appointments", appointmentRoutes);
+app.use("/api/webhooks/whatsapp", whatsappWebhookRoutes);
+app.use("/api/whatsapp-preferences", whatsappPreferenceRoutes);
 app.use("/api/payments", paymentRoutes);
 
 // Handle malformed JSON and other request errors.
@@ -119,6 +141,7 @@ server.on("error", (error) => {
 });
 
 startOverdueMaintenanceScheduler();
+startPaymentReconciliationScheduler();
 
 let shuttingDown = false;
 

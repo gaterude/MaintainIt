@@ -53,6 +53,9 @@ function TenantDashboard() {
   const [user, setUser] = useState(null);
   const [room, setRoom] = useState(null);
   const [requests, setRequests] = useState([]);
+  const [appointments, setAppointments] = useState([]);
+  const [appointmentNotes, setAppointmentNotes] = useState({});
+  const [appointmentActionId, setAppointmentActionId] = useState(null);
 
   const [loadingRoom, setLoadingRoom] = useState(true);
   const [loadingRequests, setLoadingRequests] = useState(true);
@@ -66,10 +69,129 @@ function TenantDashboard() {
 
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("success");
+  const [whatsappPreference, setWhatsappPreference] = useState(null);
+  const [updatingWhatsappPreference, setUpdatingWhatsappPreference] = useState(false);
+  const [whatsappPromptOpen, setWhatsappPromptOpen] = useState(false);
 
   function showMessage(text, type = "success") {
     setMessage(text);
     setMessageType(type);
+  }
+  function getWhatsAppPromptDismissalKey(tenantUser = user) {
+    const accountIdentifier =
+      tenantUser?.id || tenantUser?.email || "tenant";
+
+    return `maintainit_whatsapp_prompt_dismissed_${accountIdentifier}`;
+  }
+
+  async function loadWhatsAppPreference(tenantUser = user) {
+    try {
+      const data = await apiRequest("/whatsapp-preferences");
+      const preference = data.preference || null;
+
+      setWhatsappPreference(preference);
+
+      const dismissed =
+        localStorage.getItem(
+          getWhatsAppPromptDismissalKey(tenantUser)
+        ) === "true";
+
+      const previouslyOptedOut =
+        Boolean(preference?.whatsapp_opted_out_at);
+
+      if (
+        preference &&
+        !preference.whatsapp_opt_in &&
+        !previouslyOptedOut &&
+        !dismissed
+      ) {
+        setWhatsappPromptOpen(true);
+      }
+    } catch (error) {
+      showMessage(
+        error.message || "Unable to load WhatsApp preferences.",
+        "error"
+      );
+    }
+  }
+
+  function getWhatsAppPromptDismissalKey(tenantUser = user) {
+    const accountIdentifier =
+      tenantUser?.id || tenantUser?.email || "tenant";
+
+    return `maintainit_whatsapp_prompt_dismissed_${accountIdentifier}`;
+  }
+
+  async function loadWhatsAppPreference(tenantUser = user) {
+    try {
+      const data = await apiRequest("/whatsapp-preferences");
+      const preference = data.preference || null;
+
+      setWhatsappPreference(preference);
+
+      const dismissed =
+        localStorage.getItem(
+          getWhatsAppPromptDismissalKey(tenantUser)
+        ) === "true";
+
+      const previouslyOptedOut =
+        Boolean(preference?.whatsapp_opted_out_at);
+
+      if (
+        preference &&
+        !preference.whatsapp_opt_in &&
+        !previouslyOptedOut &&
+        !dismissed
+      ) {
+        setWhatsappPromptOpen(true);
+      }
+    } catch (error) {
+      showMessage(
+        error.message || "Unable to load WhatsApp preferences.",
+        "error"
+      );
+    }
+  }
+
+  async function saveWhatsAppPreference(whatsappOptIn) {
+    setUpdatingWhatsappPreference(true);
+
+    try {
+      const data = await apiRequest("/whatsapp-preferences", {
+        method: "PUT",
+        body: JSON.stringify({ whatsappOptIn }),
+      });
+
+      setWhatsappPreference(data.preference || null);
+
+      localStorage.setItem(
+        getWhatsAppPromptDismissalKey(),
+        "true"
+      );
+
+      setWhatsappPromptOpen(false);
+
+      showMessage(
+        data.message || "WhatsApp preference updated.",
+        "success"
+      );
+    } catch (error) {
+      showMessage(
+        error.message || "Unable to update WhatsApp preferences.",
+        "error"
+      );
+    } finally {
+      setUpdatingWhatsappPreference(false);
+    }
+  }
+
+  function dismissWhatsAppPrompt() {
+    localStorage.setItem(
+      getWhatsAppPromptDismissalKey(),
+      "true"
+    );
+
+    setWhatsappPromptOpen(false);
   }
 async function loadTenantRoom() {
   setLoadingRoom(true);
@@ -114,6 +236,50 @@ async function loadTenantRoom() {
     }
   }
 
+  async function loadAppointments() {
+    try {
+      const data = await apiRequest("/appointments/my-requests");
+
+      setAppointments(
+        Array.isArray(data.appointments) ? data.appointments : []
+      );
+    } catch (error) {
+      showMessage(
+        error.message || "Unable to load appointment information.",
+        "error"
+      );
+    }
+  }
+
+  function getLatestAppointment(requestId) {
+    return (
+      appointments
+        .filter(
+          (appointment) =>
+            appointment.maintenance_request_id === requestId
+        )
+        .sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() -
+            new Date(a.created_at).getTime()
+        )[0] || null
+    );
+  }
+
+  function formatAppointmentDate(value) {
+    if (!value) return "Date unavailable";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return "Date unavailable";
+    }
+
+    return new Intl.DateTimeFormat("en-KE", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(date);
+  }
   useEffect(() => {
     const token = localStorage.getItem("token");
     const savedUser = localStorage.getItem("user");
@@ -141,6 +307,10 @@ async function loadTenantRoom() {
       setUser(loggedInUser);
       loadTenantRoom();
       loadMaintenanceRequests();
+      loadWhatsAppPreference(loggedInUser);
+      loadWhatsAppPreference(loggedInUser);
+      loadWhatsAppPreference(loggedInUser);
+      loadAppointments();
     } catch {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
@@ -328,6 +498,43 @@ async function loadTenantRoom() {
     }
   }
 
+  async function handleAppointmentResponse(appointment, response) {
+    setAppointmentActionId(appointment.id);
+
+    try {
+      const result = await apiRequest(
+        `/appointments/${appointment.id}/respond`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            response,
+            note: appointmentNotes[appointment.id] || "",
+          }),
+        }
+      );
+
+      showMessage(
+        result.message ||
+          (response === "confirm"
+            ? "Appointment confirmed successfully."
+            : "Rescheduling requested successfully.")
+      );
+
+      setAppointmentNotes((current) => ({
+        ...current,
+        [appointment.id]: "",
+      }));
+
+      await loadAppointments();
+    } catch (error) {
+      showMessage(
+        error.message || "Unable to update the appointment.",
+        "error"
+      );
+    } finally {
+      setAppointmentActionId(null);
+    }
+  }
   function handleLogout() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
@@ -495,7 +702,6 @@ return null;
               </p>
             </div>
           </section>
-
           {message && (
             <div
               className={`mi-alert ${
@@ -613,7 +819,7 @@ return null;
                       </strong>
                     </div>
                   </div>
-               
+
             ) : (
               <div className="mi-empty-inline">
                 <h3>Waiting for Room Assignment</h3>
@@ -836,6 +1042,8 @@ return null;
 
                     const paymentInfo = getPaymentInfo(request);
 
+                    const appointment = getLatestAppointment(request.id);
+
                     return (
                       <article
                         className="mi-request-item"
@@ -864,6 +1072,242 @@ return null;
                             {request.description ||
                               "No description provided."}
                           </p>
+
+                          {appointment && (
+
+                            <div
+
+                              className="mi-appointment-info"
+
+                              style={{
+
+                                margin: "14px 0",
+
+                                padding: "14px",
+
+                                border: "1px solid #dbe3ec",
+
+                                borderRadius: "8px",
+
+                              }}
+
+                            >
+
+                              <h4>Fundi visit appointment</h4>
+
+
+
+                              <p>
+
+                                <strong>Proposed visit:</strong>{" "}
+
+                                {formatAppointmentDate(appointment.proposed_visit_at)}
+
+                              </p>
+
+
+
+                              <p>
+
+                                <strong>Fundi:</strong>{" "}
+
+                                {appointment.fundi_name || "Assigned fundi"}
+
+                              </p>
+
+
+
+                              <p>
+
+                                <strong>Status:</strong>{" "}
+
+                                {formatLabel(appointment.status)}
+
+                              </p>
+
+
+
+                              {appointment.tenant_response_note && (
+
+                                <p>
+
+                                  <strong>Your previous note:</strong>{" "}
+
+                                  {appointment.tenant_response_note}
+
+                                </p>
+
+                              )}
+
+
+
+                              {["pending_confirmation", "rescheduled"].includes(
+
+                                appointment.status
+
+                              ) && (
+
+                                <div>
+
+                                  <label
+
+                                    htmlFor={`appointment-note-${appointment.id}`}
+
+                                    style={{ display: "block", marginBottom: "6px" }}
+
+                                  >
+
+                                    Note for the fundi (optional)
+
+                                  </label>
+
+
+
+                                  <textarea
+
+                                    id={`appointment-note-${appointment.id}`}
+
+                                    value={appointmentNotes[appointment.id] || ""}
+
+                                    maxLength={1000}
+
+                                    rows={2}
+
+                                    onChange={(event) =>
+
+                                      setAppointmentNotes((current) => ({
+
+                                        ...current,
+
+                                        [appointment.id]: event.target.value,
+
+                                      }))
+
+                                    }
+
+                                    disabled={appointmentActionId !== null}
+
+                                    style={{
+
+                                      display: "block",
+
+                                      width: "100%",
+
+                                      maxWidth: "420px",
+
+                                      marginBottom: "10px",
+
+                                      padding: "9px",
+
+                                    }}
+
+                                  />
+
+
+
+                                  <button
+
+                                    type="button"
+
+                                    onClick={() =>
+
+                                      handleAppointmentResponse(appointment, "confirm")
+
+                                    }
+
+                                    disabled={appointmentActionId !== null}
+
+                                    style={{
+
+                                      marginRight: "8px",
+
+                                      marginBottom: "8px",
+
+                                      padding: "9px 14px",
+
+                                      border: "none",
+
+                                      borderRadius: "5px",
+
+                                      cursor: appointmentActionId !== null ? "wait" : "pointer",
+
+                                    }}
+
+                                  >
+
+                                    {appointmentActionId === appointment.id
+
+                                      ? "Processing..."
+
+                                      : "Confirm visit"}
+
+                                  </button>
+
+
+
+                                  <button
+
+                                    type="button"
+
+                                    onClick={() =>
+
+                                      handleAppointmentResponse(appointment, "reschedule")
+
+                                    }
+
+                                    disabled={appointmentActionId !== null}
+
+                                    style={{
+
+                                      marginBottom: "8px",
+
+                                      padding: "9px 14px",
+
+                                      border: "1px solid #b8c3d1",
+
+                                      borderRadius: "5px",
+
+                                      cursor: appointmentActionId !== null ? "wait" : "pointer",
+
+                                    }}
+
+                                  >
+
+                                    Request rescheduling
+
+                                  </button>
+
+                                </div>
+
+                              )}
+
+
+
+                              {appointment.status === "confirmed" && (
+
+                                <p role="status">
+
+                                  You have confirmed this visit.
+
+                                </p>
+
+                              )}
+
+
+
+                              {appointment.status === "reschedule_requested" && (
+
+                                <p role="status">
+
+                                  Your rescheduling request has been sent. The fundi needs to propose another time.
+
+                                </p>
+
+                              )}
+
+                            </div>
+
+                          )}
 
                           <div className="mi-request-meta">
                             <span>
