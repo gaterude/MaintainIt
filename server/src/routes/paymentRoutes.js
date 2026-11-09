@@ -1,14 +1,22 @@
 const express = require("express");
 
 const paymentController = require("../controllers/paymentController");
+const adminPaymentController = require("../controllers/adminPaymentController");
 
 const authenticateToken = require("../middleware/authMiddleware");
-
 const authorizeRole = require("../middleware/authorizeRole");
 
 const router = express.Router();
 
-// Existing M-Pesa payment initiation
+// Administrator-only unresolved M-Pesa payment review.
+router.get(
+  "/admin/unresolved",
+  authenticateToken,
+  authorizeRole("admin"),
+  adminPaymentController.listUnresolvedMpesaPayments
+);
+
+// Existing M-Pesa payment initiation.
 router.post(
   "/initiate",
   authenticateToken,
@@ -16,7 +24,7 @@ router.post(
   paymentController.initiatePayment
 );
 
-// Initiate a cash payment
+// Initiate a cash payment.
 router.post(
   "/cash/initiate",
   authenticateToken,
@@ -24,7 +32,7 @@ router.post(
   paymentController.initiateCashPayment
 );
 
-// Confirm cash received (assigned fundi only)
+// Confirm cash received (assigned fundi only).
 router.post(
   "/cash/:paymentId/confirm",
   authenticateToken,
@@ -32,7 +40,7 @@ router.post(
   paymentController.confirmCashPayment
 );
 
-// Existing public M-Pesa callback
+// Existing public M-Pesa callback.
 router.post(
   "/callback",
   paymentController.handleCallback

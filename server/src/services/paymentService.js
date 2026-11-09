@@ -372,15 +372,33 @@ async function initiatePayment({
     });
 
     const updatedPayment =
-      await paymentRepository.attachCheckoutRequestId(
-        payment.id,
-        stkResponse.CheckoutRequestID
-      );
+  await paymentRepository.attachCheckoutRequestId(
+    payment.id,
+    stkResponse.CheckoutRequestID
+  );
 
-    return {
-      payment: updatedPayment,
-      stkResponse,
-    };
+// Safaricom may have accepted the payment even if
+// MaintainIt failed to save the checkout reference.
+if (
+  !updatedPayment ||
+  updatedPayment.status !== "processing" ||
+  updatedPayment.checkout_request_id !==
+    stkResponse.CheckoutRequestID
+) {
+  const error = new Error(
+    "M-Pesa accepted the payment request, but MaintainIt could not confirm that its checkout reference was saved. The payment requires investigation. Do not retry yet."
+  );
+
+  error.paymentOutcomeUncertain = true;
+  error.code = "PAYMENT_OUTCOME_UNCERTAIN";
+
+  throw error;
+}
+
+return {
+  payment: updatedPayment,
+  stkResponse,
+};
   } catch (error) {
     if (error.paymentOutcomeUncertain) {
       console.error(
@@ -566,6 +584,34 @@ async function handleCallback(callbackData) {
   }
 
   const verifiedResultCode = Number(queryData.ResultCode);
+const callbackResultCode = Number(stkCallback.ResultCode);
+
+const callbackMerchantRequestId = stkCallback.MerchantRequestID;
+const queriedMerchantRequestId = queryData.MerchantRequestID;
+
+// Confirm that both Safaricom responses refer to the same request.
+if (
+  typeof callbackMerchantRequestId !== "string" ||
+  !callbackMerchantRequestId.trim() ||
+  typeof queriedMerchantRequestId !== "string" ||
+  !queriedMerchantRequestId.trim() ||
+  callbackMerchantRequestId.trim() !==
+    queriedMerchantRequestId.trim()
+) {
+  throw new Error(
+    "M-Pesa callback merchant request ID does not match the independently verified result"
+  );
+}
+
+// Confirm that the callback result agrees with the independent query.
+if (
+  !Number.isInteger(callbackResultCode) ||
+  callbackResultCode !== verifiedResultCode
+) {
+  throw new Error(
+    "M-Pesa callback result does not match the independently verified result"
+  );
+}
 
   if (verifiedResultCode !== 0) {
     // A nonzero result can include an unresolved or failed outcome.

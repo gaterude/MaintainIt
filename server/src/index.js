@@ -1,6 +1,12 @@
 const express = require("express");
 const cors = require("cors");
-require("dotenv").config();
+const helmet = require("helmet");
+const { rateLimit } = require("express-rate-limit");
+const path = require("path");
+
+require("dotenv").config({
+  path: path.resolve(__dirname, "../../.env"),
+});
 
 const pool = require("./config/database");
 
@@ -17,14 +23,26 @@ const tenantAssignmentRoutes = require("./routes/tenantAssignmentRoutes");
 
 const {
   startOverdueMaintenanceScheduler,
+  stopOverdueMaintenanceScheduler,
 } = require("./jobs/overdueMaintenanceScheduler");
 
 const {
   startPaymentReconciliationScheduler,
+  stopPaymentReconciliationScheduler,
 } = require("./jobs/paymentReconciliationScheduler");
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    message: "Too many requests. Please try again later.",
+  },
+});
 
 const allowedOrigins = (
 process.env.CLIENT_URL || "http://localhost:5173"
@@ -34,6 +52,13 @@ process.env.CLIENT_URL || "http://localhost:5173"
 .filter(Boolean);
 
 app.disable("x-powered-by");
+
+const helmetOptions =
+  process.env.NODE_ENV === "production"
+    ? {}
+    : { strictTransportSecurity: false };
+
+app.use(helmet(helmetOptions));
 
 app.use(
 cors({
@@ -52,8 +77,8 @@ allowedHeaders: ["Content-Type", "Authorization"],
 })
 );
 
-app.use(
-  express.json({
+app.use("/api", apiLimiter);
+app.use(express.json({
     limit: "1mb",
     verify(req, res, buffer) {
       if (
@@ -133,6 +158,9 @@ console.log("Database connection verified.");
 const server = app.listen(PORT, () => {
   console.log(`MaintainIt API running on port ${PORT}`);
   console.log("Allowed frontend origins:", allowedOrigins);
+  // Start background jobs only after the server successfully binds its port.
+  startOverdueMaintenanceScheduler();
+  startPaymentReconciliationScheduler();
 });
 
 server.on("error", (error) => {
@@ -140,8 +168,6 @@ server.on("error", (error) => {
   process.exitCode = 1;
 });
 
-startOverdueMaintenanceScheduler();
-startPaymentReconciliationScheduler();
 
 let shuttingDown = false;
 
@@ -151,12 +177,22 @@ const shutdown = (signal) => {
 
   console.log(`${signal} received. Shutting down MaintainIt...`);
 
+  // Stop scheduled jobs and wait for any active checks to finish.
+  const schedulerShutdown = Promise.all([
+    stopOverdueMaintenanceScheduler(),
+    stopPaymentReconciliationScheduler(),
+  ]);
+
+  // Stop accepting new HTTP requests and wait for existing requests.
   server.close(async () => {
     try {
+      await schedulerShutdown;
       await pool.end();
+
+      console.log("Database connection pool closed.");
       process.exitCode = 0;
     } catch (error) {
-      console.error("Database shutdown error:", error);
+      console.error("Shutdown error:", error);
       process.exitCode = 1;
     }
   });
@@ -164,7 +200,6 @@ const shutdown = (signal) => {
 
 process.once("SIGINT", () => shutdown("SIGINT"));
 process.once("SIGTERM", () => shutdown("SIGTERM"));
-
 
 } catch (error) {
 console.error("MaintainIt startup failed:", error.message);

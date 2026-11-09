@@ -72,7 +72,13 @@ function FundiDashboard() {
       return;
     }
 
-    loadJobs();
+    // Flow: wait one tick -> load the fundi's jobs and appointments.
+    const timerId = window.setTimeout(() => {
+      loadJobs();
+    }, 0);
+
+    // Cancel the pending load if the page closes before it runs.
+    return () => window.clearTimeout(timerId);
   }, [navigate, user, loadJobs]);
 
   async function handleJobAction(requestId, action) {
@@ -148,6 +154,9 @@ function FundiDashboard() {
 
     if (
       Number.isNaN(proposedDate.getTime()) ||
+      // This runs only when the fundi clicks the button (an event handler),
+      // so reading the clock here is correct. Lint wrongly treats it as render.
+      // eslint-disable-next-line react-hooks/purity
       proposedDate.getTime() <= Date.now()
     ) {
       setAppointmentError(

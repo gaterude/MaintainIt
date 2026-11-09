@@ -1,6 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Login from "./pages/Login";
-import TenantDashboard from "./pages/tenant/TenantDashboard";
+import TenantDashboard from "./pages/tenant/tenantDashboard.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import ManageRequests from "./pages/admin/ManageRequests";
 import AssignFundis from "./pages/admin/AssignFundis";

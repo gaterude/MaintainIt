@@ -69,7 +69,7 @@ function TenantDashboard() {
 
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("success");
-  const [whatsappPreference, setWhatsappPreference] = useState(null);
+  const [, setWhatsappPreference] = useState(null);
   const [updatingWhatsappPreference, setUpdatingWhatsappPreference] = useState(false);
   const [whatsappPromptOpen, setWhatsappPromptOpen] = useState(false);
 
@@ -77,44 +77,6 @@ function TenantDashboard() {
     setMessage(text);
     setMessageType(type);
   }
-  function getWhatsAppPromptDismissalKey(tenantUser = user) {
-    const accountIdentifier =
-      tenantUser?.id || tenantUser?.email || "tenant";
-
-    return `maintainit_whatsapp_prompt_dismissed_${accountIdentifier}`;
-  }
-
-  async function loadWhatsAppPreference(tenantUser = user) {
-    try {
-      const data = await apiRequest("/whatsapp-preferences");
-      const preference = data.preference || null;
-
-      setWhatsappPreference(preference);
-
-      const dismissed =
-        localStorage.getItem(
-          getWhatsAppPromptDismissalKey(tenantUser)
-        ) === "true";
-
-      const previouslyOptedOut =
-        Boolean(preference?.whatsapp_opted_out_at);
-
-      if (
-        preference &&
-        !preference.whatsapp_opt_in &&
-        !previouslyOptedOut &&
-        !dismissed
-      ) {
-        setWhatsappPromptOpen(true);
-      }
-    } catch (error) {
-      showMessage(
-        error.message || "Unable to load WhatsApp preferences.",
-        "error"
-      );
-    }
-  }
-
   function getWhatsAppPromptDismissalKey(tenantUser = user) {
     const accountIdentifier =
       tenantUser?.id || tenantUser?.email || "tenant";
@@ -289,6 +251,8 @@ async function loadTenantRoom() {
       return;
     }
 
+    let timerId;
+
     try {
       const loggedInUser = JSON.parse(savedUser);
 
@@ -304,18 +268,25 @@ async function loadTenantRoom() {
         return;
       }
 
-      setUser(loggedInUser);
-      loadTenantRoom();
-      loadMaintenanceRequests();
-      loadWhatsAppPreference(loggedInUser);
-      loadWhatsAppPreference(loggedInUser);
-      loadWhatsAppPreference(loggedInUser);
-      loadAppointments();
+      // Flow: wait one tick -> save the user -> load room, requests,
+      // WhatsApp preference and appointments (once).
+      timerId = window.setTimeout(() => {
+        setUser(loggedInUser);
+        loadTenantRoom();
+        loadMaintenanceRequests();
+        loadWhatsAppPreference(loggedInUser);
+        loadAppointments();
+      }, 0);
     } catch {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       navigate("/login", { replace: true });
     }
+
+    // Cancel the pending load if the page closes before it runs.
+    return () => window.clearTimeout(timerId);
+    // This should run only once, when the page opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
   async function handleCreateRequest(event) {
@@ -370,7 +341,7 @@ async function loadTenantRoom() {
   async function handlePayNow(request) {
     setMessage("");
 
-    let savedUser = {};
+    let savedUser;
 
     try {
       savedUser = JSON.parse(localStorage.getItem("user") || "{}");
@@ -719,6 +690,37 @@ return null;
                 aria-label="Dismiss message"
               >
                 Dismiss
+              </button>
+            </div>
+          )}
+
+          {/* Flow: load preference -> prompt opens if not opted in -> button saves choice -> prompt closes */}
+          {whatsappPromptOpen && (
+            <div className="mi-alert mi-alert-success" role="dialog">
+              <p>Get maintenance updates on WhatsApp?</p>
+
+              <button
+                type="button"
+                onClick={() => saveWhatsAppPreference(true)}
+                disabled={updatingWhatsappPreference}
+              >
+                {updatingWhatsappPreference ? "Saving..." : "Yes, notify me"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => saveWhatsAppPreference(false)}
+                disabled={updatingWhatsappPreference}
+              >
+                No thanks
+              </button>
+
+              <button
+                type="button"
+                onClick={dismissWhatsAppPrompt}
+                disabled={updatingWhatsappPreference}
+              >
+                Ask me later
               </button>
             </div>
           )}

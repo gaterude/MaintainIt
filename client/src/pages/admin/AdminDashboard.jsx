@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import apiRequest from "../../services/api";
 import { getStatusStyle } from "../../styles";
@@ -13,6 +18,45 @@ function AdminDashboard() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
+
+  // "now" is kept in state so rendering never calls Date.now() directly.
+  // It is filled in when the page opens and refreshed every 60 seconds
+  // (see the two useEffect blocks below).
+  const [now, setNow] = useState(0);
+
+  const [unresolvedPayments, setUnresolvedPayments] = useState([]);
+  const [paymentLoading, setPaymentLoading] = useState(true);
+  const [paymentRefreshing, setPaymentRefreshing] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
+
+  const loadUnresolvedPayments = useCallback(
+    async (manualRefresh = false) => {
+      // Flow: manual click -> show "Refreshing..." -> load -> finally block turns it off.
+      // On the first page load manualRefresh is false, so only the full loading state shows.
+      setPaymentRefreshing(manualRefresh);
+
+      try {
+        const data = await apiRequest(
+          "/payments/admin/unresolved?limit=100"
+        );
+
+        setUnresolvedPayments(
+          Array.isArray(data.payments) ? data.payments : []
+        );
+
+        setPaymentError("");
+      } catch (error) {
+        setPaymentError(
+          error.message ||
+            "Unable to load payments awaiting confirmation."
+        );
+      } finally {
+        setPaymentLoading(false);
+        setPaymentRefreshing(false);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -60,8 +104,28 @@ function AdminDashboard() {
       }
     }
 
-    loadRequests();
-  }, [navigate]);
+    // Flow: wait one tick -> save the current time -> load requests
+    // and payments.
+    const timerId = window.setTimeout(() => {
+      setNow(Date.now());
+      loadRequests();
+      loadUnresolvedPayments();
+    }, 0);
+
+    // Cancel the pending load if the page closes before it runs.
+    return () => window.clearTimeout(timerId);
+  }, [navigate, loadUnresolvedPayments]);
+
+  // Flow: every 60 seconds -> save the new time -> screen re-renders
+  // -> "Overdue by ..." text updates
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNow(Date.now());
+    }, 60 * 1000);
+
+    // Stop the timer when the page closes.
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   function handleLogout() {
     localStorage.removeItem("token");
@@ -137,7 +201,7 @@ function AdminDashboard() {
 
     const elapsedMilliseconds = Math.max(
       0,
-      Date.now() - startTime
+      now - startTime
     );
 
     const totalHours = Math.floor(
@@ -162,6 +226,71 @@ function AdminDashboard() {
     return `${days} ${days === 1 ? "day" : "days"}, ${hours} ${
       hours === 1 ? "hour" : "hours"
     }`;
+  }
+
+  function formatPaymentAmount(amountCents) {
+    const amount = Number(amountCents);
+
+    if (!Number.isFinite(amount) || amount < 0) {
+      return "Amount unavailable";
+    }
+
+    return `KSh ${(amount / 100).toLocaleString("en-KE", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  }
+
+  function formatPaymentAge(ageMinutes) {
+    const minutes = Number(ageMinutes);
+
+    if (!Number.isFinite(minutes) || minutes < 0) {
+      return "Age unavailable";
+    }
+
+    if (minutes < 60) {
+      return `${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
+    }
+
+    const totalHours = Math.floor(minutes / 60);
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+
+    if (days > 0) {
+      return `${days} ${days === 1 ? "day" : "days"}, ${hours} ${
+        hours === 1 ? "hour" : "hours"
+      }`;
+    }
+
+    return `${totalHours} ${
+      totalHours === 1 ? "hour" : "hours"
+    }`;
+  }
+
+  function formatDate(value) {
+    if (!value) {
+      return "Unavailable";
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return "Unavailable";
+    }
+
+    return date.toLocaleString("en-KE");
+  }
+
+  function getPaymentStatusLabel(status) {
+    if (status === "processing") {
+      return "Awaiting confirmation";
+    }
+
+    if (status === "pending") {
+      return "Payment starting";
+    }
+
+    return formatStatus(status);
   }
 
   const pendingCount = requests.filter(
@@ -338,14 +467,7 @@ function AdminDashboard() {
               <div className="admin-detail">
                 <span className="admin-detail-label">Repair cost</span>
                 <span>
-                  KSh{" "}
-                  {(Number(request.repair_cost_cents) / 100).toLocaleString(
-                    "en-KE",
-                    {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    }
-                  )}
+                  {formatPaymentAmount(request.repair_cost_cents)}
                 </span>
               </div>
             )}
@@ -353,7 +475,9 @@ function AdminDashboard() {
             <div className="admin-detail">
               <span className="admin-detail-label">Payment method</span>
               <span>
-                {paymentMethod ? formatStatus(paymentMethod) : "Not recorded"}
+                {paymentMethod
+                  ? formatStatus(paymentMethod)
+                  : "Not recorded"}
               </span>
             </div>
 
@@ -385,7 +509,7 @@ function AdminDashboard() {
             <p className="admin-submitted-date">
               Submitted
               <br />
-              {new Date(request.created_at).toLocaleString()}
+              {formatDate(request.created_at)}
             </p>
           )}
         </div>
@@ -447,6 +571,88 @@ function AdminDashboard() {
         </p>
 
         <h2>{title}</h2>
+      </article>
+    );
+  }
+
+  function renderUnresolvedPayment(payment) {
+    return (
+      <article
+        className="admin-payment-card"
+        key={payment.payment_id}
+      >
+        <div className="admin-payment-card-heading">
+          <div>
+            <h3>
+              {formatCategory(
+                payment.request_title || payment.request_category
+              )}
+            </h3>
+
+            <p>
+              {payment.tenant_name || "Tenant information unavailable"}
+            </p>
+          </div>
+
+          <span
+            className={`admin-payment-status admin-payment-status-${payment.payment_status}`}
+          >
+            {getPaymentStatusLabel(payment.payment_status)}
+          </span>
+        </div>
+
+        {payment.request_description && (
+          <p className="admin-payment-description">
+            {payment.request_description}
+          </p>
+        )}
+
+        <div className="admin-payment-details">
+          <div>
+            <span>Amount</span>
+            <strong>
+              {formatPaymentAmount(payment.amount_cents)}
+            </strong>
+          </div>
+
+          <div>
+            <span>Property</span>
+            <strong>
+              {payment.property_name || "Not specified"}
+            </strong>
+          </div>
+
+          <div>
+            <span>Room</span>
+            <strong>
+              {payment.room_number || "Not specified"}
+            </strong>
+          </div>
+
+          <div>
+            <span>Time awaiting confirmation</span>
+            <strong>
+              {formatPaymentAge(payment.age_minutes)}
+            </strong>
+          </div>
+
+          <div>
+            <span>Maintenance status</span>
+            <strong>
+              {formatStatus(payment.request_status)}
+            </strong>
+          </div>
+
+          <div>
+            <span>Payment started</span>
+            <strong>{formatDate(payment.created_at)}</strong>
+          </div>
+        </div>
+
+        <div className="admin-payment-info">
+          This payment is still awaiting confirmation. Please check
+          its status before asking the tenant to try again.
+        </div>
       </article>
     );
   }
@@ -643,6 +849,69 @@ function AdminDashboard() {
                   </div>
                 </article>
               ))}
+            </div>
+          )}
+        </section>
+
+        <section className="admin-panel admin-payment-review-panel">
+          <div className="admin-payment-review-heading">
+            <div>
+              <p className="admin-eyebrow">PAYMENT FOLLOW-UP</p>
+
+              <h2>Payment Follow-up</h2>
+
+              <p className="admin-panel-description">
+                Review M-Pesa payments that are still awaiting confirmation.
+              </p>
+            </div>
+
+            <div className="admin-payment-review-actions">
+              <span className="admin-payment-count">
+                {unresolvedPayments.length} need follow-up
+              </span>
+
+              <button
+                type="button"
+                className="admin-secondary-button"
+                onClick={() => loadUnresolvedPayments(true)}
+                disabled={paymentLoading || paymentRefreshing}
+              >
+                {paymentRefreshing ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
+          </div>
+
+          {paymentError && (
+            <div className="admin-payment-error" role="alert">
+              <p>{paymentError}</p>
+
+              <button
+                type="button"
+                className="admin-secondary-button"
+                onClick={() => loadUnresolvedPayments(true)}
+                disabled={paymentRefreshing}
+              >
+                Try again
+              </button>
+            </div>
+          )}
+
+          {paymentLoading ? (
+            <div className="admin-list-message">
+              <span className="admin-loading-indicator" />
+              Loading payments...
+            </div>
+          ) : paymentError ? null : unresolvedPayments.length === 0 ? (
+            <div className="admin-payment-empty">
+              <strong>No payments need follow-up</strong>
+
+              <p>
+                All M-Pesa payments are currently up to date.
+              </p>
+            </div>
+          ) : (
+            <div className="admin-payment-list">
+              {unresolvedPayments.map(renderUnresolvedPayment)}
             </div>
           )}
         </section>

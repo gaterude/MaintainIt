@@ -2,3 +2,16 @@ node_modules/
 .env
 client/node_modules/
 client/dist/
+# Local environment files and recovery artifacts
+# Keep secrets out of Git; allow safe example templates.
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Local recovery backups and audit artifacts
+*.bak
+/audit-report.json
+/testmd

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { styles } from "../styles";
+import { API_URL } from "../services/api";
 
 function Register() {
 const navigate = useNavigate();
@@ -63,7 +64,7 @@ if (Object.keys(errors).length > 0) {
 setRegistering(true);
 
 try {
-  const response = await fetch("http://localhost:4000/api/users", {
+  const response = await fetch(`${API_URL}/users`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

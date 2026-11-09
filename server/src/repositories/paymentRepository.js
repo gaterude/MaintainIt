@@ -31,15 +31,19 @@ async function createPayment({
       `SELECT id, status
        FROM payments
        WHERE maintenance_request_id = $1
-         AND status IN ('pending', 'processing')
+         AND status IN ('pending', 'processing', 'paid')
        LIMIT 1`,
       [maintenanceRequestId]
     );
 
     if (activePaymentResult.rows.length > 0) {
+      const existingPayment = activePaymentResult.rows[0];
+
       const error = new Error(
-        "A payment attempt already exists for this maintenance request. " +
-          "Resolve its current status before trying again."
+        existingPayment.status === "paid"
+          ? "This maintenance request has already been paid."
+          : "A payment attempt already exists for this maintenance request. " +
+              "Resolve its current status before trying again."
       );
 
       error.code = "PAYMENT_ATTEMPT_IN_PROGRESS";
@@ -127,7 +131,73 @@ async function findUnresolvedPayments(limit = 100) {
      FROM payments
      WHERE status IN ('pending', 'processing')
        AND payment_method = 'mpesa'
-ORDER BY created_at ASC
+     ORDER BY created_at ASC
+     LIMIT $1`,
+    [safeLimit]
+  );
+
+  return result.rows;
+}
+async function findUnresolvedMpesaPaymentsForAdmin(limit = 100) {
+  const safeLimit =
+    Number.isInteger(limit) && limit > 0
+      ? Math.min(limit, 500)
+      : 100;
+
+  const result = await pool.query(
+    `SELECT
+       p.id AS payment_id,
+       p.maintenance_request_id,
+       p.amount_cents,
+       p.status AS payment_status,
+       p.payment_method,
+       p.checkout_request_id,
+       p.transaction_reference,
+       p.created_at,
+       p.updated_at,
+
+       FLOOR(
+         EXTRACT(EPOCH FROM (NOW() - p.created_at)) / 60
+       )::integer AS age_minutes,
+
+       mr.title AS request_title,
+       mr.category AS request_category,
+       mr.description AS request_description,
+       mr.status AS request_status,
+
+       tenant_user.name AS tenant_name,
+       tenant_user.email AS tenant_email,
+       tenant_user.phone AS tenant_phone,
+
+       payer_user.name AS payer_name,
+
+       r.room_number,
+       prop.name AS property_name
+
+     FROM payments p
+
+     JOIN maintenance_requests mr
+       ON mr.id = p.maintenance_request_id
+
+     LEFT JOIN tenants t
+       ON t.id = mr.tenant_id
+
+     LEFT JOIN users tenant_user
+       ON tenant_user.id = t.user_id
+
+     LEFT JOIN users payer_user
+       ON payer_user.id = p.payer_id
+
+     LEFT JOIN rooms r
+       ON r.id = mr.room_id
+
+     LEFT JOIN properties prop
+       ON prop.id = r.property_id
+
+     WHERE p.payment_method = 'mpesa'
+       AND p.status IN ('pending', 'processing')
+
+     ORDER BY p.created_at ASC
      LIMIT $1`,
     [safeLimit]
   );
@@ -279,7 +349,9 @@ module.exports = {
   attachCheckoutRequestId,
   findPaymentByCheckoutRequestId,
   findUnresolvedPayments,
+  findUnresolvedMpesaPaymentsForAdmin,
   markPaymentPaid,
   markPaymentFailed,
   confirmCashPayment,
 };
+
