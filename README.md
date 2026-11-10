@@ -1,4 +1,4 @@
-\# MaintainIt
+# MaintainIt
 
 
 
@@ -10,61 +10,61 @@ It provides a central workflow for reporting maintenance issues, assigning techn
 
 
 
-\## Features
+## Features
 
 
 
-\### Tenants
+### Tenants
 
-\- Register and log in.
+- Register and log in.
 
-\- Submit and track maintenance requests.
+- Submit and track maintenance requests.
 
-\- View assigned room information.
+- View assigned room information.
 
-\- Confirm appointments or request rescheduling.
+- Confirm appointments or request rescheduling.
 
-\- View payment information.
-
-
-
-\### Administrators
-
-\- Manage maintenance requests.
-
-\- Determine maintenance responsibility.
-
-\- Assign fundis to maintenance jobs.
-
-\- Manage tenant and room assignments.
-
-\- Review maintenance history and payments.
+- View payment information.
 
 
 
-\### Fundis
+### Administrators
 
-\- View and accept assigned jobs.
+- Manage maintenance requests.
 
-\- Propose appointment times.
+- Determine maintenance responsibility.
 
-\- Respond to rescheduling requests.
+- Assign fundis to maintenance jobs.
 
-\- Complete eligible maintenance jobs.
+- Manage tenant and room assignments.
+
+- Review maintenance history and payments.
 
 
 
-\### Integrations
+### Fundis
 
-\- Safaricom Daraja M-Pesa.
+- View and accept assigned jobs.
 
-\- Africa's Talking SMS.
+- Propose appointment times.
 
-\- Resend email notifications.
+- Respond to rescheduling requests.
 
-\- Automated overdue-maintenance checks.
+- Complete eligible maintenance jobs.
 
-\- Scheduled payment reconciliation.
+
+
+### Integrations
+
+- Safaricom Daraja M-Pesa.
+
+- Africa's Talking SMS.
+
+- Resend email notifications.
+
+- Automated overdue-maintenance checks.
+
+- Scheduled payment reconciliation.
 
 
 
@@ -72,45 +72,45 @@ WhatsApp integration is currently deferred.
 
 
 
-\## Technology Stack
+## Technology Stack
 
 
 
-\- Frontend: React and Vite.
+- Frontend: React and Vite.
 
-\- Backend: Node.js and Express.
+- Backend: Node.js and Express.
 
-\- Database: PostgreSQL.
+- Database: PostgreSQL.
 
-\- Authentication: JSON Web Tokens.
+- Authentication: JSON Web Tokens.
 
-\- Password hashing: bcryptjs.
+- Password hashing: bcryptjs.
 
-\- Scheduled jobs: node-cron.
+- Scheduled jobs: node-cron.
 
-\- Payments: Safaricom Daraja API.
-
-
-
-\## Requirements
+- Payments: Safaricom Daraja API.
 
 
 
-\- Node.js 22.12 or later.
-
-\- npm.
-
-\- PostgreSQL.
-
-\- Git.
+## Requirements
 
 
 
-\## Installation
+- Node.js 22.12 or later.
+
+- npm.
+
+- PostgreSQL.
+
+- Git.
 
 
 
-\### 1. Clone the repository
+## Installation
+
+
+
+### 1. Clone the repository
 
 
 
@@ -124,7 +124,7 @@ cd MaintainIt
 
 
 
-\### 2. Install backend dependencies
+### 2. Install backend dependencies
 
 
 
@@ -140,7 +140,7 @@ npm install
 
 
 
-\### 3. Install frontend dependencies
+### 3. Install frontend dependencies
 
 
 
@@ -156,7 +156,7 @@ cd ..
 
 
 
-\## Environment Configuration
+## Environment Configuration
 
 
 
@@ -196,65 +196,65 @@ Update the root `.env` with your actual configuration.
 
 
 
-\### Required backend variables
+### Required backend variables
 
 
 
-\- DB\_HOST
+- DB_HOST
 
-\- DB\_PORT
+- DB_PORT
 
-\- DB\_NAME
+- DB_NAME
 
-\- DB\_USER
+- DB_USER
 
-\- DB\_PASSWORD
+- DB_PASSWORD
 
-\- JWT\_SECRET
-
-
-
-\### Optional integration variables
+- JWT_SECRET
 
 
 
-\*\*Africa's Talking SMS\*\*
-
-\- AT\_USERNAME
-
-\- AT\_API\_KEY
+### Optional integration variables
 
 
 
-\*\*Resend email\*\*
+**Africa's Talking SMS**
 
-\- RESEND\_API\_KEY
+- AT_USERNAME
 
-\- EMAIL\_FROM
-
-
-
-\*\*Safaricom Daraja\*\*
-
-\- MPESA\_ENV
-
-\- MPESA\_CONSUMER\_KEY
-
-\- MPESA\_CONSUMER\_SECRET
-
-\- MPESA\_SHORTCODE
-
-\- MPESA\_PASSKEY
-
-\- MPESA\_CALLBACK\_URL
+- AT_API_KEY
 
 
 
-\### Frontend variable
+**Resend email**
+
+- RESEND_API_KEY
+
+- EMAIL_FROM
 
 
 
-The frontend uses `VITE\_API\_URL`.
+**Safaricom Daraja**
+
+- MPESA_ENV
+
+- MPESA_CONSUMER_KEY
+
+- MPESA_CONSUMER_SECRET
+
+- MPESA_SHORTCODE
+
+- MPESA_PASSKEY
+
+- MPESA_CALLBACK_URL
+
+
+
+### Frontend variable
+
+
+
+The frontend uses `VITE_API_URL`.
 
 
 
@@ -264,7 +264,7 @@ Local development:
 
 ```env
 
-VITE\_API\_URL=http://localhost:4000/api
+VITE_API_URL=http://localhost:4000/api
 
 ```
 
@@ -278,7 +278,7 @@ For deployment, configure the actual backend URL before building the frontend.
 
 
 
-\### Generate a JWT secret
+### Generate a JWT secret
 
 
 
@@ -298,7 +298,7 @@ Keep the generated secret private. Never commit your actual `.env` files or expo
 
 
 
-\## Database Setup
+## Database Setup
 
 
 
@@ -312,7 +312,7 @@ Connect to PostgreSQL as an administrator and run:
 
 ```sql
 
-CREATE ROLE maintainit\_user
+CREATE ROLE maintainit_user
 
 WITH LOGIN PASSWORD 'replace-with-a-strong-password';
 
@@ -320,7 +320,7 @@ WITH LOGIN PASSWORD 'replace-with-a-strong-password';
 
 CREATE DATABASE maintainit
 
-OWNER maintainit\_user;
+OWNER maintainit_user;
 
 ```
 
@@ -330,7 +330,7 @@ Use the same credentials in the root `.env` file.
 
 
 
-\### Run database migrations
+### Run database migrations
 
 
 
@@ -348,23 +348,23 @@ npm run db:migrate
 
 The migration runner:
 
-\- Discovers numbered SQL migration files.
+- Discovers numbered SQL migration files.
 
-\- Executes them in filename order.
+- Executes them in filename order.
 
-\- Records applied migrations in `schema\_migrations`.
+- Records applied migrations in `schema_migrations`.
 
-\- Stores SHA-256 checksums.
+- Stores SHA-256 checksums.
 
-\- Skips previously applied migrations.
+- Skips previously applied migrations.
 
-\- Detects changes to previously applied migration files.
+- Detects changes to previously applied migration files.
 
-\- Uses a PostgreSQL advisory lock to prevent concurrent migration runs.
+- Uses a PostgreSQL advisory lock to prevent concurrent migration runs.
 
 
 
-\*\*Important:\*\* The current migration runner is intended for a new, empty database or a database already managed by its migration history.
+**Important:** The current migration runner is intended for a new, empty database or a database already managed by its migration history.
 
 
 
@@ -380,7 +380,7 @@ Do not modify previously applied migration files. Create a new numbered migratio
 
 
 
-\## First Administrator Setup
+## First Administrator Setup
 
 
 
@@ -404,13 +404,13 @@ The command requires these temporary environment variables:
 
 
 
-\- BOOTSTRAP\_ADMIN\_NAME
+- BOOTSTRAP_ADMIN_NAME
 
-\- BOOTSTRAP\_ADMIN\_EMAIL
+- BOOTSTRAP_ADMIN_EMAIL
 
-\- BOOTSTRAP\_ADMIN\_PHONE
+- BOOTSTRAP_ADMIN_PHONE
 
-\- BOOTSTRAP\_ADMIN\_PASSWORD
+- BOOTSTRAP_ADMIN_PASSWORD
 
 
 
@@ -420,13 +420,13 @@ The password must contain at least 12 characters.
 
 The bootstrap utility:
 
-\- Hashes the password using bcrypt.
+- Hashes the password using bcrypt.
 
-\- Uses a database transaction.
+- Uses a database transaction.
 
-\- Uses an advisory lock to serialize bootstrap attempts.
+- Uses an advisory lock to serialize bootstrap attempts.
 
-\- Refuses to create another administrator when one already exists.
+- Refuses to create another administrator when one already exists.
 
 
 
@@ -434,7 +434,7 @@ The initial administrator should be created before normal staff accounts are reg
 
 
 
-\## Running MaintainIt Locally
+## Running MaintainIt Locally
 
 
 
@@ -442,7 +442,7 @@ Open two terminals.
 
 
 
-\### Terminal 1: Backend
+### Terminal 1: Backend
 
 
 
@@ -474,7 +474,7 @@ http://localhost:4000/
 
 
 
-\### Terminal 2: Frontend
+### Terminal 2: Frontend
 
 
 
@@ -500,7 +500,7 @@ http://localhost:5173
 
 
 
-\## Production Build
+## Production Build
 
 
 
@@ -526,11 +526,11 @@ The generated production files are stored in:
 
 
 
-Configure `VITE\_API\_URL` to the deployed backend address before building.
+Configure `VITE_API_URL` to the deployed backend address before building.
 
 
 
-Configure the backend's `CLIENT\_URL` to the actual deployed frontend origin.
+Configure the backend's `CLIENT_URL` to the actual deployed frontend origin.
 
 
 
@@ -538,7 +538,7 @@ Use HTTPS for production services.
 
 
 
-\### M-Pesa deployment
+### M-Pesa deployment
 
 
 
@@ -546,7 +546,7 @@ MaintainIt includes a Daraja payment integration and scheduled payment reconcili
 
 
 
-Keep `MPESA\_ENV=sandbox` during development and testing.
+Keep `MPESA_ENV=sandbox` during development and testing.
 
 
 
@@ -558,27 +558,27 @@ Do not switch to production credentials until live payments, callback verificati
 
 
 
-\## Security
+## Security
 
 
 
 The backend includes:
 
-\- JWT authentication.
+- JWT authentication.
 
-\- Role-based authorization.
+- Role-based authorization.
 
-\- Bcrypt password hashing.
+- Bcrypt password hashing.
 
-\- Helmet security headers.
+- Helmet security headers.
 
-\- API rate limiting.
+- API rate limiting.
 
-\- Restricted CORS origins.
+- Restricted CORS origins.
 
-\- Request body size limits.
+- Request body size limits.
 
-\- Database validation constraints.
+- Database validation constraints.
 
 
 
@@ -608,7 +608,7 @@ npm audit
 
 
 
-\## Project Status
+## Project Status
 
 
 
@@ -628,7 +628,7 @@ A successful installation or frontend build does not by itself establish product
 
 
 
-\## Available Commands
+## Available Commands
 
 
 
@@ -646,17 +646,16 @@ A successful installation or frontend build does not by itself establish product
 
 | `npm run bootstrap:admin` | Create the initial administrator |
 
-| `cd client \&\& npm install` | Install frontend dependencies |
+| `cd client && npm install` | Install frontend dependencies |
 
-| `cd client \&\& npm run dev` | Start frontend |
+| `cd client && npm run dev` | Start frontend |
 
-| `cd client \&\& npm run build` | Build frontend for production |
+| `cd client && npm run build` | Build frontend for production |
 
 
 
-\## Repository
+## Repository
 
 
 
 https://github.com/gaterude/MaintainIt
-
