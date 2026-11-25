@@ -66,12 +66,21 @@ async function resolveMpesaPayment({ requestId, user, cancel }) {
 
   const code = await askSafaricom(payment.checkout_request_id);
 
-  // Money may have moved. Never cancel in that case.
+  // Safaricom itself confirms this exact checkout succeeded. The status query
+  // has no receipt number (only the callback does), so record a verified
+  // reference. Never cancel in this case: the money has moved.
   if (code === 0) {
+    const paid = await paymentRepository.markPaymentPaid({
+      paymentId: payment.id,
+      transactionReference: `MPESA-VERIFIED-${payment.checkout_request_id}`.slice(0, 100),
+    });
+
     return {
-      outcome: "success_pending_receipt",
+      outcome: "paid",
       message:
-        "Safaricom reports this payment succeeded. It will be marked paid once the receipt is verified. Do not pay again.",
+        paid && paid.status === "paid"
+          ? "Payment confirmed. Thank you."
+          : "Safaricom reports this payment succeeded. Do not pay again.",
     };
   }
 

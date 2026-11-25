@@ -560,11 +560,24 @@ async function handleCallback(callbackData) {
     return payment;
   }
 
-  // Never trust the public callback alone to determine payment status.
-  // Verify the checkout independently with Safaricom.
-  const queryResult = await querySTKPushStatus(
-    checkoutRequestId.trim()
-  );
+    // Safaricom's status service is sometimes slow right after a payment.
+  // Retry a few times before giving up so a real payment is not lost.
+  let queryResult;
+  let lastError;
+
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    try {
+      queryResult = await querySTKPushStatus(checkoutRequestId.trim());
+      break;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 4) {
+        await new Promise((resolve) => setTimeout(resolve, 3000 * attempt));
+      }
+    }
+  }
+
+  if (!queryResult) throw lastError;
 
   const queryData = queryResult?.data;
 
