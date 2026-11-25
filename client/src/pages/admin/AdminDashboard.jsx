@@ -12,6 +12,7 @@ import "./AdminTheme.css";
 import AdminLayout from "../../components/admin/AdminLayout";
 import AdminAnalytics from "../../components/admin/AdminAnalytics";
 import { toast } from "../../components/toast/toast";
+import PropertyPayments from "../../components/admin/PropertyPayments";
 
 function AdminDashboard() {
   const navigate = useNavigate();
@@ -841,6 +842,7 @@ function AdminDashboard() {
         </>)}
 
         {section === "money" && (<>
+  <PropertyPayments />
         <div className="mi-tabs" role="tablist">
           <button type="button" className={payTab === "pending" ? "is-on" : ""} onClick={() => setPayTab("pending")}>
             Pending ({unresolvedPayments.length})

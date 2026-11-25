@@ -442,6 +442,36 @@ async function loadTenantRoom() {
       setPayingRequestId(null);
     }
   }
+  async function handleMpesaRecovery(request, action) {
+    if (
+      action === "cancel" &&
+      !window.confirm(
+        "Cancel the waiting M-Pesa attempt? Only do this if no prompt arrived."
+      )
+    ) {
+      return;
+    }
+
+    setPayingRequestId(request.id);
+
+    try {
+      const result = await apiRequest(
+        `/payments/mpesa/${request.id}/${action}`,
+        { method: "POST" }
+      );
+
+      showMessage(result.message);
+      await loadMaintenanceRequests();
+    } catch (error) {
+      showMessage(
+        error.message || "Unable to update the payment.",
+        "error"
+      );
+    } finally {
+      setPayingRequestId(null);
+    }
+  }
+
     async function handleCashPayment(request) {
 
     const repairCost = Number(request.repair_cost_cents);
@@ -1441,6 +1471,35 @@ return null;
     </button>
   </div>
 )}
+
+                          {request.responsible_party === "tenant" &&
+                            paymentStatus === "processing" &&
+                            request.payment_method !== "cash" && (
+                              <div className="mi-payment-actions">
+                                <button
+                                  type="button"
+                                  className="mi-pay-button"
+                                  onClick={() =>
+                                    handleMpesaRecovery(request, "check")
+                                  }
+                                  disabled={payingRequestId === request.id}
+                                >
+                                  Check status
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="mi-pay-button mi-cash-pay-button"
+                                  onClick={() =>
+                                    handleMpesaRecovery(request, "cancel")
+                                  }
+                                  disabled={payingRequestId === request.id}
+                                >
+                                  Cancel attempt
+                                </button>
+                              </div>
+                            )}
+
                           <div className="mi-request-footer">
                             <span>
                               Request ID:{" "}
