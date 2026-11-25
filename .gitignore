@@ -18,3 +18,12 @@ client/dist/
 # Local recovery backups
 /server/scripts-backup-*/
 *.before-*
+# local-only files
+.env
+backups/
+*.zip
+*.dump
+server/storage/maintenance-photos/*
+!server/storage/maintenance-photos/.gitkeep
+node_modules/
+client/dist/

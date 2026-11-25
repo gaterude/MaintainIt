@@ -1,0 +1,42 @@
+/* Shared shell. Prefix ax- so it never clashes with the tenant page's mi- classes. */
+.ax-shell {
+  --ax-navy: #14213d; --ax-navy2: #22335c; --ax-green: #16a34a;
+  --ax-bg: #f3f5f8; --ax-line: #e3e7ee; --ax-mut: #64708a;
+  display: flex; min-height: 100vh; background: var(--ax-bg); color: var(--ax-navy);
+  font-family: system-ui, "Segoe UI", sans-serif;
+}
+.ax-sidebar {
+  width: 236px; flex: none; background: var(--ax-navy); color: #cbd3e4;
+  padding: 22px 12px; display: flex; flex-direction: column; gap: 2px;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto; box-sizing: border-box;
+}
+.ax-logo { color: #fff; font-weight: 800; font-size: 20px; padding: 0 10px; }
+.ax-logo span { color: var(--ax-green); }
+.ax-role { margin: 2px 0 8px; padding: 0 10px; font-size: 12px; color: #7d89a8; }
+.ax-nav-group { margin: 16px 0 4px; padding: 0 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #7d89a8; }
+.ax-nav-item {
+  display: flex; justify-content: space-between; align-items: center; width: 100%;
+  text-align: left; border: 0; background: transparent; color: inherit; font: inherit;
+  padding: 9px 10px; border-radius: 8px; cursor: pointer; text-decoration: none; box-sizing: border-box;
+}
+.ax-nav-item:hover { background: #1c2d52; color: #fff; }
+.ax-nav-item.is-active { background: var(--ax-navy2); color: #fff; box-shadow: inset 3px 0 var(--ax-green); }
+.ax-nav-badge { background: var(--ax-green); color: #fff; border-radius: 99px; padding: 0 7px; font-size: 12px; }
+.ax-logout { margin-top: auto; color: #aab4cc; }
+.ax-content { flex: 1; min-width: 0; }
+.ax-main { max-width: 1120px; margin: 0 auto; padding: 28px 28px 48px; }
+.ax-page-head { margin-bottom: 20px; }
+.ax-page-title { margin: 0; font-size: 24px; font-weight: 700; }
+.ax-page-desc { margin: 4px 0 0; color: var(--ax-mut); }
+.ax-shell .admin-main, .ax-shell .fundi-main { max-width: none; margin: 0; padding: 0; }
+.ax-shell .fundi-page, .ax-shell .admin-dashboard { min-height: 0; background: transparent; }
+
+@media (max-width: 800px) {
+  .ax-shell { flex-direction: column; }
+  .ax-sidebar { width: auto; height: auto; position: static; flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .ax-nav-group, .ax-role { display: none; }
+  .ax-nav-group + * { display: contents; }
+  .ax-nav-item { width: auto; }
+  .ax-logout { margin-top: 0; }
+  .ax-main { padding: 16px; }
+}

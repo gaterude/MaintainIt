@@ -1,0 +1,25 @@
+﻿# Dependencies
+node_modules/
+**/node_modules/
+
+# Frontend build output
+client/dist/
+
+# Git
+.git/
+.gitignore
+
+# Environment files and secrets
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Local backups and recovery files
+*.bak
+*.before-*
+server/scripts-backup-*/
+
+# Local audit artifacts
+audit-report.json
+testmd

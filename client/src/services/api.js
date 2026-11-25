@@ -4,7 +4,7 @@ export async function apiRequest(endpoint, options = {}) {
   const token = localStorage.getItem("token");
 
   const headers = {
-    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    ...(options.body && !(options.body instanceof FormData) ? { "Content-Type": "application/json" } : {}),
     ...options.headers,
   };
 

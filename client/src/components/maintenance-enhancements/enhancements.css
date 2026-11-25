@@ -1,0 +1,35 @@
+.mi-enhancement-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:18px;margin:24px 0;color:var(--mi-text,#1d2939)}
+.mi-enhancement-panel{background:var(--mi-white,#fff);border:1px solid var(--mi-border,#e4e7ec);border-radius:14px;padding:20px;min-width:0;box-shadow:0 2px 8px rgba(16,24,40,.04)}
+.mi-enhancement-panel h2{font-size:1.1rem;margin:0 0 12px}.mi-enhancement-panel p{line-height:1.55;color:var(--mi-muted,#667085)}
+.mi-enhancement-panel textarea,.mi-enhancement-panel input,.mi-enhancement-panel select{display:block;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;padding:10px;margin:7px 0 12px;font:inherit;background:#fff;color:#101828}
+.mi-enhancement-panel textarea{min-height:82px;resize:vertical}.mi-enhancement-panel button{border:0;border-radius:8px;padding:10px 15px;background:var(--mi-green,#18794e);color:white;font-weight:600;cursor:pointer}.mi-enhancement-panel button:disabled{opacity:.55;cursor:not-allowed}
+.mi-rating-item,.mi-feedback{border-top:1px solid #eaecf0;padding:14px 0;display:grid;gap:7px}.mi-rating-item span,.mi-photo-row span,.mi-feedback small{color:#667085;font-size:.9rem}.mi-assessment{margin-top:14px;padding:12px;background:#f8fafc;border-radius:8px}.mi-assessment small{display:block;line-height:1.5;color:#667085}.mi-photo-row{display:block;border-top:1px solid #eaecf0;padding:12px 0}.mi-enhancement-notice{grid-column:1/-1;color:#176b45}.mi-reputation{display:flex;align-items:center;gap:12px}.mi-reputation strong{font-size:1.8rem;color:#176b45}.mi-analytics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}.mi-analytics-grid div{padding:13px;background:#f8fafc;border-radius:9px;display:grid;gap:6px}.mi-analytics-grid span{font-size:.85rem;color:#667085}.mi-analytics-grid strong{font-size:1.25rem}
+
+.mi-photo-preview{display:inline-block;width:88px;height:72px;object-fit:cover;border-radius:7px;margin:8px 8px 0 0;border:1px solid #eaecf0}
+.mi-photo-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}.mi-photo-gallery a{display:grid;gap:5px;color:inherit;text-decoration:none;font-size:.8rem}.mi-photo-gallery img{width:100%;height:90px;object-fit:cover;border-radius:7px;border:1px solid #eaecf0}
+
+/* Photo picker on the request form: thumbnails with a remove button */
+.mi-optional{font-weight:400;color:#667085;font-size:.85em}
+.mi-photo-picker{list-style:none;margin:10px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:10px}
+.mi-photo-picker li{position:relative}
+.mi-photo-picker img{display:block;width:100%;height:78px;object-fit:cover;border-radius:8px;border:1px solid #eaecf0}
+.mi-photo-remove{position:absolute;top:-7px;right:-7px;width:22px;height:22px;padding:0;border:0;border-radius:50%;background:#101828;color:#fff;font-size:15px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.mi-photo-remove:hover{background:#b42318}
+.mi-photo-remove:disabled{opacity:.5;cursor:not-allowed}
+
+.mi-status-pill { display: inline-block; margin-bottom: 12px; padding: 3px 10px; border-radius: 99px; font-size: 13px; background: #fef3e2; color: #b45309; }
+.mi-status-pill.mi-status-verified { background: #e8f7ee; color: #157a3b; }
+.mi-status-pill.mi-status-rejected { background: #fde8e8; color: #b91c1c; }
+.mi-profile-saved p { margin: 0 0 10px; }
+.mi-profile-saved small { color: #64708a; }
+
+.mi-rate-backdrop { position: fixed; inset: 0; background: rgba(20,33,61,.45); display: grid; place-items: center; z-index: 50; padding: 16px; }
+.mi-rate-card { background: #fff; border-radius: 12px; padding: 22px; width: 100%; max-width: 380px; box-shadow: 0 10px 30px rgba(0,0,0,.2); }
+.mi-rate-card h3 { margin: 0 0 4px; }
+.mi-rate-card p { margin: 0 0 12px; color: #64708a; }
+.mi-rate-stars { display: flex; gap: 6px; justify-content: center; margin-bottom: 12px; }
+.mi-rate-stars button { font-size: 34px; line-height: 1; background: none; border: 0; color: #cfd5e2; cursor: pointer; padding: 0 2px; }
+.mi-rate-stars button.is-on { color: #f5a623; }
+.mi-rate-card textarea { width: 100%; box-sizing: border-box; min-height: 70px; border: 1px solid #e3e7ee; border-radius: 8px; padding: 8px; font: inherit; }
+.mi-rate-actions { display: flex; justify-content: space-between; margin-top: 12px; }
+.mi-rate-skip { background: transparent !important; color: #64708a !important; border: 0 !important; }

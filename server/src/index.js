@@ -15,11 +15,16 @@ const maintenanceRequestRoutes = require("./routes/maintenanceRequestRoutes");
 const maintenanceResponsibilityRoutes = require("./routes/maintenanceResponsibilityRoutes");
 const maintenanceAssignmentRoutes = require("./routes/maintenanceAssignmentRoutes");
 const maintenanceHistoryRoutes = require("./routes/maintenanceHistoryRoutes");
+const maintenanceRatingRoutes = require("./routes/maintenanceRatingRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const appointmentRoutes = require("./routes/appointmentRoutes");
 const whatsappWebhookRoutes = require("./routes/whatsappWebhookRoutes");
 const whatsappPreferenceRoutes = require("./routes/whatsappPreferenceRoutes");
 const tenantAssignmentRoutes = require("./routes/tenantAssignmentRoutes");
+const maintenanceAiRoutes = require("./routes/maintenanceAiRoutes");
+const maintenancePhotoRoutes = require("./routes/maintenancePhotoRoutes");
+const fundiProfileRoutes = require("./routes/fundiProfileRoutes");
+const propertyAnalyticsRoutes = require("./routes/propertyAnalyticsRoutes");
 
 const {
   startOverdueMaintenanceScheduler,
@@ -32,6 +37,7 @@ const {
 } = require("./jobs/paymentReconciliationScheduler");
 
 const app = express();
+app.set("trust proxy", 1); // needed behind Render so rate limits see the real client IP
 const PORT = Number(process.env.PORT) || 4000;
 
 const apiLimiter = rateLimit({
@@ -77,6 +83,8 @@ allowedHeaders: ["Content-Type", "Authorization"],
 })
 );
 
+app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
+
 app.use("/api", apiLimiter);
 app.use(express.json({
     limit: "1mb",
@@ -103,10 +111,15 @@ app.use("/api/maintenance-requests", maintenanceRequestRoutes);
 app.use("/api/maintenance-responsibilities", maintenanceResponsibilityRoutes);
 app.use("/api/maintenance-assignments", maintenanceAssignmentRoutes);
 app.use("/api/maintenance-history", maintenanceHistoryRoutes);
+app.use("/api/maintenance-ratings", maintenanceRatingRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/webhooks/whatsapp", whatsappWebhookRoutes);
 app.use("/api/whatsapp-preferences", whatsappPreferenceRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/maintenance-ai", maintenanceAiRoutes);
+app.use("/api/maintenance-photos", maintenancePhotoRoutes);
+app.use("/api/fundi-profiles", fundiProfileRoutes);
+app.use("/api/property-analytics", propertyAnalyticsRoutes);
 
 // Handle malformed JSON and other request errors.
 app.use((error, req, res, next) => {

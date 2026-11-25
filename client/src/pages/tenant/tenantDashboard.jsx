@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import apiRequest from "../../services/api";
 import "./TenantDashboard.css";
+import "./TenantTheme.css";
+import EnhancementPanels, { RatingPrompt } from "../../components/maintenance-enhancements/EnhancementPanels";
+import { toast } from "../../components/toast/toast";
 
 const categories = [
   { value: "plumbing", label: "Plumbing" },
@@ -17,6 +20,11 @@ const priorities = [
   { value: "medium", label: "Medium — normal maintenance" },
   { value: "urgent", label: "Urgent — needs attention" },
 ];
+
+// Photo rules (the server enforces the same limits).
+const MAX_PHOTOS = 5;
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 function formatLabel(value) {
   if (!value) return "Not available";
@@ -65,95 +73,21 @@ function TenantDashboard() {
   const [category, setCategory] = useState("");
   const [priority, setPriority] = useState("medium");
   const [description, setDescription] = useState("");
+  // Photos chosen on the form. Each item keeps the file and a temporary preview URL.
+  const [photos, setPhotos] = useState([]);
+  const photosRef = useRef([]);
+  // Changing this number restarts the AI box, clearing its text and suggestion.
+  const [assistantKey, setAssistantKey] = useState(0);
   const [requestFilter, setRequestFilter] = useState("all");
+  // Sidebar sections: overview (new request + AI), requests (history), room.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const section = searchParams.get("section") || "overview";
+  const goTo = (next) => setSearchParams(next === "overview" ? {} : { section: next });
 
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("success");
-  const [, setWhatsappPreference] = useState(null);
-  const [updatingWhatsappPreference, setUpdatingWhatsappPreference] = useState(false);
-  const [whatsappPromptOpen, setWhatsappPromptOpen] = useState(false);
-
+  // Shows a small notification that disappears on its own.
   function showMessage(text, type = "success") {
-    setMessage(text);
-    setMessageType(type);
-  }
-  function getWhatsAppPromptDismissalKey(tenantUser = user) {
-    const accountIdentifier =
-      tenantUser?.id || tenantUser?.email || "tenant";
-
-    return `maintainit_whatsapp_prompt_dismissed_${accountIdentifier}`;
-  }
-
-  async function loadWhatsAppPreference(tenantUser = user) {
-    try {
-      const data = await apiRequest("/whatsapp-preferences");
-      const preference = data.preference || null;
-
-      setWhatsappPreference(preference);
-
-      const dismissed =
-        localStorage.getItem(
-          getWhatsAppPromptDismissalKey(tenantUser)
-        ) === "true";
-
-      const previouslyOptedOut =
-        Boolean(preference?.whatsapp_opted_out_at);
-
-      if (
-        preference &&
-        !preference.whatsapp_opt_in &&
-        !previouslyOptedOut &&
-        !dismissed
-      ) {
-        setWhatsappPromptOpen(true);
-      }
-    } catch (error) {
-      showMessage(
-        error.message || "Unable to load WhatsApp preferences.",
-        "error"
-      );
-    }
-  }
-
-  async function saveWhatsAppPreference(whatsappOptIn) {
-    setUpdatingWhatsappPreference(true);
-
-    try {
-      const data = await apiRequest("/whatsapp-preferences", {
-        method: "PUT",
-        body: JSON.stringify({ whatsappOptIn }),
-      });
-
-      setWhatsappPreference(data.preference || null);
-
-      localStorage.setItem(
-        getWhatsAppPromptDismissalKey(),
-        "true"
-      );
-
-      setWhatsappPromptOpen(false);
-
-      showMessage(
-        data.message || "WhatsApp preference updated.",
-        "success"
-      );
-    } catch (error) {
-      showMessage(
-        error.message || "Unable to update WhatsApp preferences.",
-        "error"
-      );
-    } finally {
-      setUpdatingWhatsappPreference(false);
-    }
-  }
-
-  function dismissWhatsAppPrompt() {
-    localStorage.setItem(
-      getWhatsAppPromptDismissalKey(),
-      "true"
-    );
-
-    setWhatsappPromptOpen(false);
+    if (type === "error") toast.error(text);
+    else toast.success(text);
   }
 async function loadTenantRoom() {
   setLoadingRoom(true);
@@ -165,7 +99,6 @@ async function loadTenantRoom() {
     setRoom(null);
 
     if (error.status === 404) {
-      setMessage("");
     } else {
       showMessage(
         error.message || "Unable to load your room details.",
@@ -268,13 +201,12 @@ async function loadTenantRoom() {
         return;
       }
 
-      // Flow: wait one tick -> save the user -> load room, requests,
-      // WhatsApp preference and appointments (once).
+      // Flow: wait one tick -> save the user -> load room, requests
+      // and appointments (once).
       timerId = window.setTimeout(() => {
         setUser(loggedInUser);
         loadTenantRoom();
         loadMaintenanceRequests();
-        loadWhatsAppPreference(loggedInUser);
         loadAppointments();
       }, 0);
     } catch {
@@ -289,9 +221,68 @@ async function loadTenantRoom() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
+  // Keep a copy of the list so previews can be released when the page closes.
+  useEffect(() => {
+    photosRef.current = photos;
+  }, [photos]);
+
+  useEffect(
+    () => () => photosRef.current.forEach((item) => URL.revokeObjectURL(item.url)),
+    []
+  );
+
+  // Flow: pick files -> check type, size and total -> show thumbnails.
+  function handleAddPhotos(event) {
+    const chosen = Array.from(event.target.files || []);
+    event.target.value = ""; // lets the same file be chosen again after removing it
+
+    const accepted = [];
+
+    for (const file of chosen) {
+      if (!PHOTO_TYPES.includes(file.type)) {
+        toast.error(`${file.name}: only JPEG, PNG or WebP images are allowed.`);
+      } else if (file.size > MAX_PHOTO_BYTES) {
+        toast.error(`${file.name} is larger than 5 MB.`);
+      } else if (photos.length + accepted.length >= MAX_PHOTOS) {
+        toast.error(`You can attach up to ${MAX_PHOTOS} photos.`);
+        break;
+      } else {
+        accepted.push({ file, url: URL.createObjectURL(file) });
+      }
+    }
+
+    if (accepted.length > 0) setPhotos((previous) => [...previous, ...accepted]);
+  }
+
+  function handleRemovePhoto(index) {
+    setPhotos((previous) => {
+      URL.revokeObjectURL(previous[index].url);
+      return previous.filter((_, position) => position !== index);
+    });
+  }
+
+  // The server's reply shape for a new request may vary, so read the ID defensively.
+  async function findNewRequestId(data, text) {
+    const direct =
+      data?.request?.id ||
+      data?.maintenanceRequest?.id ||
+      data?.request?.request_id ||
+      data?.id ||
+      data?.request_id;
+
+    if (direct) return direct;
+
+    // Fallback: take the newest of my requests that has the same description.
+    const list = await apiRequest("/maintenance-requests/my-requests");
+    const match = (Array.isArray(list.requests) ? list.requests : [])
+      .filter((item) => (item.description || "").trim() === text)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+
+    return match?.id || match?.request_id || null;
+  }
+
   async function handleCreateRequest(event) {
     event.preventDefault();
-    setMessage("");
 
     if (!room?.roomId) {
       showMessage(
@@ -312,21 +303,52 @@ async function loadTenantRoom() {
     setSubmittingRequest(true);
 
     try {
-      await apiRequest("/maintenance-requests", {
+      const submittedText = description.trim();
+
+      const created = await apiRequest("/maintenance-requests", {
         method: "POST",
         body: JSON.stringify({
           roomId: room.roomId,
           category,
           priority,
-          description: description.trim(),
+          description: submittedText,
         }),
       });
 
+      // Flow: request saved -> upload the chosen photos to it -> reset the form.
+      let photoProblem = "";
+
+      if (photos.length > 0) {
+        try {
+          const requestId = await findNewRequestId(created, submittedText);
+
+          if (!requestId) throw new Error("Could not find the new request.");
+
+          const form = new FormData();
+          photos.forEach((item) => form.append("photos", item.file));
+
+          await apiRequest(`/maintenance-photos/${requestId}`, {
+            method: "POST",
+            body: form,
+          });
+        } catch (photoError) {
+          photoProblem = photoError.message || "The photos could not be uploaded.";
+        }
+      }
+
+      photos.forEach((item) => URL.revokeObjectURL(item.url));
+      setPhotos([]);
       setCategory("");
       setPriority("medium");
       setDescription("");
+      setAssistantKey((current) => current + 1);
 
-      showMessage("Maintenance request submitted successfully.");
+      if (photoProblem) {
+        toast.error(`Request submitted, but the photos were not uploaded: ${photoProblem}`);
+      } else {
+        showMessage("Maintenance request submitted successfully.");
+      }
+
       await loadMaintenanceRequests();
     } catch (error) {
       showMessage(
@@ -339,7 +361,6 @@ async function loadTenantRoom() {
   }
 
   async function handlePayNow(request) {
-    setMessage("");
 
     let savedUser;
 
@@ -421,8 +442,37 @@ async function loadTenantRoom() {
       setPayingRequestId(null);
     }
   }
+  async function handleMpesaRecovery(request, action) {
+    if (
+      action === "cancel" &&
+      !window.confirm(
+        "Cancel the waiting M-Pesa attempt? Only do this if no prompt arrived."
+      )
+    ) {
+      return;
+    }
+
+    setPayingRequestId(request.id);
+
+    try {
+      const result = await apiRequest(
+        `/payments/mpesa/${request.id}/${action}`,
+        { method: "POST" }
+      );
+
+      showMessage(result.message);
+      await loadMaintenanceRequests();
+    } catch (error) {
+      showMessage(
+        error.message || "Unable to update the payment.",
+        "error"
+      );
+    } finally {
+      setPayingRequestId(null);
+    }
+  }
+
     async function handleCashPayment(request) {
-    setMessage("");
 
     const repairCost = Number(request.repair_cost_cents);
 
@@ -532,13 +582,7 @@ async function loadTenantRoom() {
 
   function handleStatClick(filter) {
     setRequestFilter(filter);
-
-    window.setTimeout(() => {
-      document.getElementById("my-requests")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 50);
+    goTo("requests");
   }
 
   function getPaymentInfo(request) {
@@ -610,21 +654,16 @@ return null;
         </a>
 
         <nav className="mi-navigation" aria-label="Main navigation">
-          <a className="mi-nav-link mi-nav-active" href="#dashboard">
-            Dashboard
-          </a>
-
-          <a className="mi-nav-link" href="#my-requests">
-            My Requests
-          </a>
-
-          <a className="mi-nav-link" href="#my-room">
-            My Room
-          </a>
-
-          <a className="mi-nav-link" href="#profile">
-            Profile
-          </a>
+          {[["overview", "Dashboard"], ["requests", "My Requests"], ["room", "My Room"]].map(([id, text]) => (
+            <a
+              key={id}
+              className={"mi-nav-link" + (section === id ? " mi-nav-active" : "")}
+              href={id === "overview" ? "/tenant/dashboard" : "/tenant/dashboard?section=" + id}
+              onClick={(event) => { event.preventDefault(); goTo(id); }}
+            >
+              {text}
+            </a>
+          ))}
         </nav>
 
         <button
@@ -663,6 +702,7 @@ return null;
         </header>
 
         <main className="mi-content" id="dashboard">
+          {section === "overview" && (<>
           <section className="mi-welcome-banner">
             <div className="mi-welcome-copy">
               <p className="mi-eyebrow">YOUR HOME, WELL MAINTAINED</p>
@@ -673,58 +713,47 @@ return null;
               </p>
             </div>
           </section>
-          {message && (
-            <div
-              className={`mi-alert ${
-                messageType === "error"
-                  ? "mi-alert-error"
-                  : "mi-alert-success"
-              }`}
-              role={messageType === "error" ? "alert" : "status"}
-            >
-              <p>{message}</p>
-
-              <button
-                type="button"
-                onClick={() => setMessage("")}
-                aria-label="Dismiss message"
-              >
-                Dismiss
-              </button>
-            </div>
-          )}
-
-          {/* Flow: load preference -> prompt opens if not opted in -> button saves choice -> prompt closes */}
-          {whatsappPromptOpen && (
-            <div className="mi-alert mi-alert-success" role="dialog">
-              <p>Get maintenance updates on WhatsApp?</p>
-
-              <button
-                type="button"
-                onClick={() => saveWhatsAppPreference(true)}
-                disabled={updatingWhatsappPreference}
-              >
-                {updatingWhatsappPreference ? "Saving..." : "Yes, notify me"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => saveWhatsAppPreference(false)}
-                disabled={updatingWhatsappPreference}
-              >
-                No thanks
-              </button>
-
-              <button
-                type="button"
-                onClick={dismissWhatsAppPrompt}
-                disabled={updatingWhatsappPreference}
-              >
-                Ask me later
-              </button>
-            </div>
-          )}
-
+          {/* Visits waiting for the tenant: shown on the dashboard so they are never missed. */}
+          {appointments
+            .filter((a) => ["pending_confirmation", "rescheduled"].includes(a.status))
+            .map((a) => (
+              <section className="mi-visit-card" key={a.id}>
+                <div>
+                  <h3>Your fundi proposed a visit</h3>
+                  <p>
+                    <strong>{a.fundi_name || "Your fundi"}</strong> will visit on{" "}
+                    <strong>{formatAppointmentDate(a.proposed_visit_at)}</strong>.
+                  </p>
+                  <input
+                    type="text"
+                    maxLength={300}
+                    placeholder="Optional note (for example, a time that suits you better)"
+                    value={appointmentNotes[a.id] || ""}
+                    onChange={(event) =>
+                      setAppointmentNotes((current) => ({ ...current, [a.id]: event.target.value }))
+                    }
+                  />
+                </div>
+                <div className="mi-visit-actions">
+                  <button
+                    type="button"
+                    className="mi-visit-confirm"
+                    disabled={appointmentActionId !== null}
+                    onClick={() => handleAppointmentResponse(a, "confirm")}
+                  >
+                    {appointmentActionId === a.id ? "Saving..." : "Confirm visit"}
+                  </button>
+                  <button
+                    type="button"
+                    className="mi-visit-reschedule"
+                    disabled={appointmentActionId !== null}
+                    onClick={() => handleAppointmentResponse(a, "reschedule")}
+                  >
+                    Ask to reschedule
+                  </button>
+                </div>
+              </section>
+            ))}
           <section className="mi-stats-grid" aria-label="Request summary">
             <button
               type="button"
@@ -780,72 +809,6 @@ return null;
 
           <div className="mi-dashboard-columns">
             <div className="mi-left-column">
-              <section className="mi-panel" id="my-room">
-                <div className="mi-panel-heading">
-                  <div className="mi-heading-title">
-                    <h2>My Room</h2>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="mi-text-button"
-                    onClick={loadTenantRoom}
-                    disabled={loadingRoom}
-                  >
-                    {loadingRoom ? "Loading..." : "Refresh"}
-                  </button>
-                </div>
-
-                {loadingRoom ? (
-                  <div className="mi-empty-inline">
-                    Loading your room details...
-                  </div>
-                ) : room ? (
-                  <div className="mi-room-details">
-                    <div className="mi-room-detail">
-                      <span>Room Number</span>
-                      <strong>{room.roomNumber || "Unavailable"}</strong>
-                    </div>
-
-                    <div className="mi-room-detail">
-                      <span>Property</span>
-                      <strong>
-                        {room.propertyName || "Unavailable"}
-                      </strong>
-                    </div>
-
-                    <div className="mi-room-detail mi-room-address">
-                      <span>Address</span>
-                      <strong>
-                        {room.propertyAddress || "Unavailable"}
-                      </strong>
-                    </div>
-                  </div>
-
-            ) : (
-              <div className="mi-empty-inline">
-                <h3>Waiting for Room Assignment</h3>
-
-                <p>
-                  Your account has been registered successfully.
-                  Please wait for the administrator to assign you
-                  a room. Your room details will appear here once
-                  the assignment is complete.
-                </p>
-
-                <button
-                  type="button"
-                  className="mi-text-button"
-                  onClick={loadTenantRoom}
-                  disabled={loadingRoom}
-                >
-                  {loadingRoom ? "Checking..." : "Check Again"}
-                </button>
-              </div>
-            )}
-
-              </section>
-
               <section className="mi-panel" id="new-request">
                 <div className="mi-panel-heading mi-heading-start">
                   <div>
@@ -924,6 +887,41 @@ return null;
                     />
                   </div>
 
+                  <div className="mi-form-field">
+                    <label htmlFor="mi-photos">
+                      Photos <span className="mi-optional">(optional, up to {MAX_PHOTOS})</span>
+                    </label>
+
+                    <input
+                      id="mi-photos"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      multiple
+                      onChange={handleAddPhotos}
+                      disabled={photos.length >= MAX_PHOTOS || submittingRequest}
+                    />
+
+                    {photos.length > 0 && (
+                      <ul className="mi-photo-picker" aria-label="Selected photos">
+                        {photos.map((item, index) => (
+                          <li key={item.url}>
+                            <img src={item.url} alt={item.file.name} />
+
+                            <button
+                              type="button"
+                              className="mi-photo-remove"
+                              aria-label={`Remove ${item.file.name}`}
+                              onClick={() => handleRemovePhoto(index)}
+                              disabled={submittingRequest}
+                            >
+                              ×
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
                   <div className="mi-room-notice">
                     <span>
                       Room:{" "}
@@ -952,6 +950,95 @@ return null;
               </section>
             </div>
 
+            <EnhancementPanels
+              key={assistantKey}
+              role="tenant"
+              onApplyAssessment={(suggestion) => {
+                // Flow: AI suggestion -> fill the form -> tenant reviews and submits.
+                setCategory(suggestion.category);
+                setPriority(suggestion.priority);
+                if (!description.trim()) setDescription(suggestion.description);
+                showMessage("Suggestions added to the request form. Review and edit them, then submit.");
+                document.getElementById("mi-category")?.scrollIntoView({ behavior: "smooth", block: "center" });
+              }}
+            />
+
+          </div>
+          </>)}
+
+          {section === "room" && (
+            <div className="mi-dashboard-columns"><div className="mi-left-column">
+              <section className="mi-panel" id="my-room">
+                <div className="mi-panel-heading">
+                  <div className="mi-heading-title">
+                    <h2>My Room</h2>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="mi-text-button"
+                    onClick={loadTenantRoom}
+                    disabled={loadingRoom}
+                  >
+                    {loadingRoom ? "Loading..." : "Refresh"}
+                  </button>
+                </div>
+
+                {loadingRoom ? (
+                  <div className="mi-empty-inline">
+                    Loading your room details...
+                  </div>
+                ) : room ? (
+                  <div className="mi-room-details">
+                    <div className="mi-room-detail">
+                      <span>Room Number</span>
+                      <strong>{room.roomNumber || "Unavailable"}</strong>
+                    </div>
+
+                    <div className="mi-room-detail">
+                      <span>Property</span>
+                      <strong>
+                        {room.propertyName || "Unavailable"}
+                      </strong>
+                    </div>
+
+                    <div className="mi-room-detail mi-room-address">
+                      <span>Address</span>
+                      <strong>
+                        {room.propertyAddress || "Unavailable"}
+                      </strong>
+                    </div>
+                  </div>
+
+            ) : (
+              <div className="mi-empty-inline">
+                <h3>Waiting for Room Assignment</h3>
+
+                <p>
+                  Your account has been registered successfully.
+                  Please wait for the administrator to assign you
+                  a room. Your room details will appear here once
+                  the assignment is complete.
+                </p>
+
+                <button
+                  type="button"
+                  className="mi-text-button"
+                  onClick={loadTenantRoom}
+                  disabled={loadingRoom}
+                >
+                  {loadingRoom ? "Checking..." : "Check Again"}
+                </button>
+              </div>
+            )}
+
+              </section>
+
+            </div></div>
+          )}
+
+          {section === "requests" && (
+            <div className="mi-dashboard-columns">
             <section
               className="mi-panel mi-requests-panel"
               id="my-requests"
@@ -1384,6 +1471,35 @@ return null;
     </button>
   </div>
 )}
+
+                          {request.responsible_party === "tenant" &&
+                            paymentStatus === "processing" &&
+                            request.payment_method !== "cash" && (
+                              <div className="mi-payment-actions">
+                                <button
+                                  type="button"
+                                  className="mi-pay-button"
+                                  onClick={() =>
+                                    handleMpesaRecovery(request, "check")
+                                  }
+                                  disabled={payingRequestId === request.id}
+                                >
+                                  Check status
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="mi-pay-button mi-cash-pay-button"
+                                  onClick={() =>
+                                    handleMpesaRecovery(request, "cancel")
+                                  }
+                                  disabled={payingRequestId === request.id}
+                                >
+                                  Cancel attempt
+                                </button>
+                              </div>
+                            )}
+
                           <div className="mi-request-footer">
                             <span>
                               Request ID:{" "}
@@ -1397,7 +1513,8 @@ return null;
                 </div>
               )}
             </section>
-          </div>
+            </div>
+          )}
 
           <footer className="mi-footer">
             <span>MaintainIt</span>
@@ -1405,6 +1522,7 @@ return null;
           </footer>
         </main>
       </div>
+      <RatingPrompt />
     </div>
   );
 }
