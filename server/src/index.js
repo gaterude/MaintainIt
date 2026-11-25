@@ -37,6 +37,7 @@ const {
 } = require("./jobs/paymentReconciliationScheduler");
 
 const app = express();
+app.set("trust proxy", 1); // needed behind Render so rate limits see the real client IP
 const PORT = Number(process.env.PORT) || 4000;
 
 const apiLimiter = rateLimit({
@@ -81,6 +82,8 @@ allowedHeaders: ["Content-Type", "Authorization"],
 
 })
 );
+
+app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
 app.use("/api", apiLimiter);
 app.use(express.json({

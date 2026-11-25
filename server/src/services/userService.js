@@ -85,11 +85,6 @@ async function loginUser({ email, password }) {
   const user =
     await userRepository.findUserByEmail(normalizedEmail);
 
-  // Temporary diagnostic: does the account exist?
-  console.log(
-    "[LOGIN DEBUG] Account found:",
-    Boolean(user)
-  );
 
   if (!user) {
     throw new Error("Invalid email or password");
@@ -100,11 +95,7 @@ async function loginUser({ email, password }) {
     user.password_hash
   );
 
-  // Temporary diagnostic: does the password match?
-  console.log(
-    "[LOGIN DEBUG] Password matches:",
-    passwordMatches
-  );
+ 
 
   if (!passwordMatches) {
     throw new Error("Invalid email or password");
