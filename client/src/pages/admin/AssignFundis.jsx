@@ -1,8 +1,9 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiRequest from "../../services/api";
 import { styles, getStatusStyle } from "../../styles";
+import AdminLayout from "../../components/admin/AdminLayout";
+import { toast } from "../../components/toast/toast";
 
 function AssignFundis() {
   const navigate = useNavigate();
@@ -13,8 +14,6 @@ function AssignFundis() {
   const [loading, setLoading] = useState(true);
   const [loadingFundis, setLoadingFundis] = useState(true);
   const [assigningId, setAssigningId] = useState(null);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -52,7 +51,6 @@ function AssignFundis() {
 
   async function loadRequests() {
     setLoading(true);
-    setError("");
 
     try {
       const data = await apiRequest("/maintenance-requests/all");
@@ -67,7 +65,7 @@ function AssignFundis() {
         )
       );
     } catch (requestError) {
-      setError(
+      toast.error(
         requestError.message ||
           "Unable to load approved maintenance requests."
       );
@@ -86,7 +84,7 @@ function AssignFundis() {
         Array.isArray(data.fundis) ? data.fundis : []
       );
     } catch (fundiError) {
-      setError(
+      toast.error(
         fundiError.message || "Unable to load registered fundis."
       );
     } finally {
@@ -100,14 +98,11 @@ function AssignFundis() {
     const fundiId = fundiIds[requestId];
 
     if (!fundiId) {
-      setError("Please select a fundi before assigning the job.");
-      setMessage("");
+      toast.error("Please select a fundi before assigning the job.");
       return;
     }
 
     setAssigningId(requestId);
-    setMessage("");
-    setError("");
 
     try {
       const data = await apiRequest("/maintenance-assignments", {
@@ -118,7 +113,8 @@ function AssignFundis() {
         }),
       });
 
-      setMessage(data.message || "Fundi assigned successfully.");
+      // Flow: save the assignment -> small notification -> reload the list.
+      toast.success(data.message || "Fundi assigned successfully.");
 
       setFundiIds((previous) => {
         const updated = { ...previous };
@@ -128,7 +124,7 @@ function AssignFundis() {
 
       await loadRequests();
     } catch (assignmentError) {
-      setError(
+      toast.error(
         assignmentError.message || "Unable to assign the fundi."
       );
     } finally {
@@ -153,48 +149,8 @@ function AssignFundis() {
   }
 
   return (
-    <div style={styles.page}>
-      <header style={styles.header}>
-        <h1 style={styles.brand}>MaintainIt</h1>
-
-        <button
-          type="button"
-          style={styles.secondaryButton}
-          onClick={handleLogout}
-        >
-          Logout
-        </button>
-      </header>
-
-      <main style={styles.container}>
-        <button
-          type="button"
-          style={styles.secondaryButton}
-          onClick={() => navigate("/admin/dashboard")}
-        >
-          Back to Dashboard
-        </button>
-
-        <div style={styles.welcome}>
-          <h2>Assign Fundis</h2>
-
-          <p style={styles.muted}>
-            Assign approved maintenance jobs to registered fundis.
-          </p>
-        </div>
-
-        {message && (
-          <div role="status" style={styles.message}>
-            {message}
-          </div>
-        )}
-
-        {error && (
-          <div role="alert" style={styles.error}>
-            {error}
-          </div>
-        )}
-
+    <AdminLayout title="Assign Fundis" description="Assign approved maintenance jobs to registered fundis.">
+      <div>
         <section style={styles.card}>
           <h3 style={styles.sectionTitle}>
             Approved Maintenance Requests ({requests.length})
@@ -348,8 +304,8 @@ function AssignFundis() {
             </button>
           )}
         </section>
-      </main>
-    </div>
+      </div>
+    </AdminLayout>
   );
 }
 

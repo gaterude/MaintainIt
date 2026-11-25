@@ -1,8 +1,9 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiRequest from "../../services/api";
 import { styles } from "../../styles";
+import AdminLayout from "../../components/admin/AdminLayout";
+import { toast } from "../../components/toast/toast";
 
 function TenantAssignments() {
   const navigate = useNavigate();
@@ -12,7 +13,6 @@ function TenantAssignments() {
   const [selectedRooms, setSelectedRooms] = useState({});
   const [loading, setLoading] = useState(true);
   const [assigningId, setAssigningId] = useState(null);
-  const [tenantMessages, setTenantMessages] = useState({});
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -68,7 +68,7 @@ function TenantAssignments() {
           : []
       );
     } catch (loadError) {
-      alert(
+      toast.error(
         loadError.message ||
           "Unable to load tenants and rooms."
       );
@@ -77,28 +77,19 @@ function TenantAssignments() {
     }
   }
 
+  // Flow: check a room was chosen -> save the assignment -> show a small
+  // notification -> reload the lists so the new room appears.
   async function handleAssignment(event, userId) {
     event.preventDefault();
 
     const roomId = selectedRooms[userId];
 
     if (!roomId) {
-      setTenantMessages((previous) => ({
-        ...previous,
-        [userId]: {
-          type: "error",
-          text: "Please select a room first.",
-        },
-      }));
+      toast.error("Please select a room first.");
       return;
     }
 
     setAssigningId(userId);
-
-    setTenantMessages((previous) => ({
-      ...previous,
-      [userId]: null,
-    }));
 
     try {
       const data = await apiRequest(
@@ -112,13 +103,7 @@ function TenantAssignments() {
         }
       );
 
-      setTenantMessages((previous) => ({
-        ...previous,
-        [userId]: {
-          type: "success",
-          text: data.message || "Tenant assigned successfully.",
-        },
-      }));
+      toast.success(data.message || "Tenant assigned successfully.");
 
       setSelectedRooms((previous) => {
         const updated = { ...previous };
@@ -128,15 +113,10 @@ function TenantAssignments() {
 
       await loadData();
     } catch (assignmentError) {
-      setTenantMessages((previous) => ({
-        ...previous,
-        [userId]: {
-          type: "error",
-          text:
-            assignmentError.message ||
-            "Unable to assign the tenant.",
-        },
-      }));
+      toast.error(
+        assignmentError.message ||
+          "Unable to assign the tenant."
+      );
     } finally {
       setAssigningId(null);
     }
@@ -150,36 +130,8 @@ function TenantAssignments() {
   }
 
   return (
-    <div style={styles.page}>
-      <header style={styles.header}>
-        <h1 style={styles.brand}>MaintainIt</h1>
-
-        <button
-          type="button"
-          style={styles.secondaryButton}
-          onClick={handleLogout}
-        >
-          Logout
-        </button>
-      </header>
-
-      <main style={styles.container}>
-        <button
-          type="button"
-          style={styles.secondaryButton}
-          onClick={() => navigate("/admin/dashboard")}
-        >
-          Back to Dashboard
-        </button>
-
-        <div style={styles.welcome}>
-          <h2>Tenant Room Assignments</h2>
-
-          <p style={styles.muted}>
-            Assign registered tenants to rooms or change their
-            existing room assignments.
-          </p>
-        </div>
+    <AdminLayout title="Tenant Room Assignments" description="Assign registered tenants to rooms or change their existing room assignments.">
+      <div>
 
         {loading ? (
           <p style={styles.muted}>
@@ -201,9 +153,6 @@ function TenantAssignments() {
                   const currentRoom = tenant.room_number
                     ? `${tenant.property_name} — Room ${tenant.room_number}`
                     : null;
-
-                  const tenantMessage =
-                    tenantMessages[tenant.user_id];
 
                   return (
                     <article
@@ -253,18 +202,13 @@ function TenantAssignments() {
                           value={
                             selectedRooms[tenant.user_id] || ""
                           }
-                          onChange={(event) => {
+                          onChange={(event) =>
                             setSelectedRooms((previous) => ({
                               ...previous,
                               [tenant.user_id]:
                                 event.target.value,
-                            }));
-
-                            setTenantMessages((previous) => ({
-                              ...previous,
-                              [tenant.user_id]: null,
-                            }));
-                          }}
+                            }))
+                          }
                           required
                         >
                           <option value="">
@@ -308,23 +252,6 @@ function TenantAssignments() {
                               : "Assign Room"}
                         </button>
                       </form>
-
-                      {tenantMessage && (
-                        <div
-                          role={
-                            tenantMessage.type === "error"
-                              ? "alert"
-                              : "status"
-                          }
-                          style={
-                            tenantMessage.type === "error"
-                              ? styles.error
-                              : styles.message
-                          }
-                        >
-                          {tenantMessage.text}
-                        </div>
-                      )}
                     </article>
                   );
                 })
@@ -376,8 +303,8 @@ function TenantAssignments() {
             </button>
           </>
         )}
-      </main>
-    </div>
+      </div>
+    </AdminLayout>
   );
 }
 

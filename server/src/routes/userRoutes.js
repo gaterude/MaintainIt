@@ -19,9 +19,9 @@ const router = express.Router();
 
 // Public registration: tenants only
 router.post(
-"/",
-validateUser("tenant"),
-userController.createUser
+  "/",
+  validateUser("tenant"),
+  userController.createUser
 );
 
 // Public login
@@ -30,19 +30,19 @@ router.post("/login", loginLimiter, userController.loginUser);
 // Protected registration: admins only
 // Admins can register other admins and fundis
 router.post(
-"/staff",
-authenticateToken,
-authorizeRole("admin"),
-validateUser("admin", "fundi"),
-userController.createUser
+  "/staff",
+  authenticateToken,
+  authorizeRole("admin"),
+  validateUser("admin", "fundi"),
+  userController.createStaffUser
 );
 
 // Only administrators can view fundis
 router.get(
-"/fundis",
-authenticateToken,
-authorizeRole("admin"),
-userController.getFundis
+  "/fundis",
+  authenticateToken,
+  authorizeRole("admin"),
+  userController.getFundis
 );
 
 module.exports = router;

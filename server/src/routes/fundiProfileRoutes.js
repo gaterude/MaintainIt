@@ -1,0 +1,12 @@
+const express = require('express');
+const auth = require('../middleware/authMiddleware');
+const role = require('../middleware/authorizeRole');
+const validateUuidParams = require('../middleware/validateUuidParams');
+const controller = require('../controllers/fundiProfileController');
+const router = express.Router();
+router.use(auth);
+router.get('/me', role('fundi'), controller.getMine);
+router.put('/me', role('fundi'), controller.saveMine);
+router.patch('/:fundiId/verification', role('admin'), validateUuidParams('fundiId'), controller.setVerification);
+router.get('/:fundiId', role('tenant', 'admin', 'fundi'), validateUuidParams('fundiId'), controller.getProfile);
+module.exports = router;

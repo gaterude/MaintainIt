@@ -1,0 +1,16 @@
+/* Tighter, calmer fundi pages. Loaded after FundiDashboard.css so these win. */
+.fundi-main { max-width: 980px; }
+.fundi-welcome h2 { font-size: 24px; color: #14213d; }
+.fundi-job-list { display: flex; flex-direction: column; gap: 10px; }
+.fundi-job-card { padding: 14px 16px; border-radius: 10px; box-shadow: none; border: 1px solid #e3e7ee; }
+.fundi-job-card-header { padding-bottom: 8px; margin-bottom: 8px; }
+.fundi-job-title-group h3 { font-size: 16px; margin: 0; }
+.fundi-job-description { margin: 0 0 8px; padding-bottom: 8px; }
+.fundi-job-description p { margin: 2px 0 0; font-size: 14px; }
+.fundi-job-details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 16px; padding: 8px 0; margin: 0; }
+.fundi-job-card-footer { padding-top: 8px; margin-top: 4px; gap: 12px; font-size: 13px; }
+.fundi-job-dates { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.fundi-job-dates p { margin: 0; }
+.fundi-detail-label { font-size: 11px; }
+.fundi-stat-card { padding: 16px 18px; }
+@media (max-width: 700px) { .fundi-job-details { grid-template-columns: 1fr; } }

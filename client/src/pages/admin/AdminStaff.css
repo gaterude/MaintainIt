@@ -1,0 +1,17 @@
+﻿.st-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; align-items: start; }
+.st-card { background: #fff; border: 1px solid #e3e7ee; border-radius: 10px; padding: 18px; color: #14213d; display: flex; flex-direction: column; gap: 12px; }
+.st-card h2 { margin: 0; font-size: 15px; }
+.st-card label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; }
+.st-card input { padding: 9px 11px; border: 1px solid #e3e7ee; border-radius: 8px; font: inherit; font-weight: 400; }
+.st-card input:focus { outline: 2px solid #bfe6cd; border-color: #16a34a; }
+.st-roles { display: flex; gap: 6px; }
+.st-roles button { flex: 1; padding: 9px; border: 1px solid #e3e7ee; background: #fff; border-radius: 8px; font: inherit; cursor: pointer; color: #64708a; }
+.st-roles button.is-on { background: #14213d; border-color: #14213d; color: #fff; }
+.st-submit { background: #16a34a; color: #fff; border: 0; border-radius: 8px; padding: 10px; font: inherit; cursor: pointer; }
+.st-submit:disabled { opacity: .6; cursor: not-allowed; }
+.st-muted { margin: 0; color: #64708a; font-size: 13px; }
+.st-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.st-list li { display: grid; gap: 2px; padding-bottom: 10px; border-bottom: 1px solid #eef0f4; }
+.st-list span { color: #64708a; font-size: 13px; }
+.st-list em { font-style: normal; font-size: 12px; color: #157a3b; }
+@media (max-width: 800px) { .st-grid { grid-template-columns: 1fr; } }

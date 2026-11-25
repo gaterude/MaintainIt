@@ -1,5 +1,4 @@
 const appointmentRepository = require("../repositories/appointmentRepository");
-const whatsappService = require("./whatsappService");
 
 function createError(message, statusCode = 400) {
   const error = new Error(message);
@@ -70,40 +69,6 @@ function normalizeRepositoryError(error) {
   return error;
 }
 
-
-async function notifyAppointment(appointmentId) {
-  try {
-    const appointment =
-      await appointmentRepository.findAppointmentNotificationDetails(
-        appointmentId
-      );
-
-    if (!appointment || appointment.whatsapp_opt_in !== true) {
-      return;
-    }
-
-    const result = await whatsappService.sendAppointmentProposal({
-      phoneNumber: appointment.tenant_phone,
-      tenantName: appointment.tenant_name,
-      appointmentId: appointment.id,
-      proposedVisitAt: appointment.proposed_visit_at,
-      optedIn: appointment.whatsapp_opt_in === true,
-    });
-
-    if (!result.sent) {
-      console.info(
-        "WhatsApp appointment notification skipped:",
-        result.reason
-      );
-    }
-  } catch (error) {
-    // Notification failures must not undo a saved appointment.
-    console.error(
-      "WhatsApp appointment notification failed:",
-      error.message
-    );
-  }
-}
 async function proposeAppointment({
   requestId,
   fundiId,
@@ -114,15 +79,11 @@ async function proposeAppointment({
   const validatedVisitAt = validateFutureVisit(proposedVisitAt);
 
   try {
-    const appointment = await appointmentRepository.createAppointment({
+    return await appointmentRepository.createAppointment({
       requestId: validatedRequestId,
       fundiId: validatedFundiId,
       proposedVisitAt: validatedVisitAt,
     });
-
-    await notifyAppointment(appointment.id);
-
-    return appointment;
   } catch (error) {
     throw normalizeRepositoryError(error);
   }
@@ -217,15 +178,11 @@ async function rescheduleAppointment({
   const validatedVisitAt = validateFutureVisit(proposedVisitAt);
 
   try {
-    const appointment = await appointmentRepository.rescheduleAppointment({
+    return await appointmentRepository.rescheduleAppointment({
       appointmentId: validatedAppointmentId,
       fundiId: validatedFundiId,
       proposedVisitAt: validatedVisitAt,
     });
-
-    await notifyAppointment(appointment.id);
-
-    return appointment;
   } catch (error) {
     throw normalizeRepositoryError(error);
   }

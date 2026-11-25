@@ -613,13 +613,24 @@ if (
   );
 }
 
-  if (verifiedResultCode !== 0) {
-    // A nonzero result can include an unresolved or failed outcome.
-    // Leave it for reconciliation instead of guessing.
+    if (verifiedResultCode !== 0) {
+    const finalFailureCodes = new Set([
+      1,    // Insufficient funds
+      1032, // Customer cancelled the STK prompt
+      1037, // STK timeout
+      2001, // Incorrect M-Pesa PIN
+    ]);
+
+    if (finalFailureCodes.has(verifiedResultCode)) {
+      return paymentRepository.markPaymentFailed(payment.id);
+    }
+
+    // Unknown outcomes must remain unresolved until verified.
     throw new Error(
-      "Safaricom has not confirmed a successful payment. Payment status remains unchanged."
+      "Safaricom has not confirmed a final payment outcome. Payment status remains unchanged."
     );
   }
+  
 
   const metadata = stkCallback.CallbackMetadata?.Item || [];
 

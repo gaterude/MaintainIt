@@ -109,6 +109,8 @@ async function findAssignmentsByFundi(fundiId) {
       mr.title,
       mr.description,
       mr.status,
+      mr.category,
+      mr.priority,
       r.room_number,
       p.name AS property_name,
       p.address AS property_address,

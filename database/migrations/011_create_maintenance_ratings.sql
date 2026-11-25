@@ -1,4 +1,4 @@
-﻿-- Tenant ratings for completed maintenance jobs.
+-- Tenant ratings for completed maintenance jobs.
 -- One immutable rating per maintenance request.
 -- Tenant and fundi identities are derived from existing records.
 

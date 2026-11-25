@@ -4,17 +4,20 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import apiRequest from "../../services/api";
 import { getStatusStyle } from "../../styles";
 import "./AdminDashboard.css";
+import "./AdminTheme.css";
+import AdminLayout from "../../components/admin/AdminLayout";
+import AdminAnalytics from "../../components/admin/AdminAnalytics";
+import { toast } from "../../components/toast/toast";
 
 function AdminDashboard() {
   const navigate = useNavigate();
 
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -28,6 +31,8 @@ function AdminDashboard() {
   const [paymentLoading, setPaymentLoading] = useState(true);
   const [paymentRefreshing, setPaymentRefreshing] = useState(false);
   const [paymentError, setPaymentError] = useState("");
+  // Payments section tabs: "pending" (awaiting M-Pesa) or "failed" (failed/cancelled attempts).
+  const [payTab, setPayTab] = useState("pending");
 
   const loadUnresolvedPayments = useCallback(
     async (manualRefresh = false) => {
@@ -96,7 +101,7 @@ function AdminDashboard() {
           Array.isArray(data.requests) ? data.requests : []
         );
       } catch (error) {
-        setMessage(
+        toast.error(
           error.message || "Unable to load maintenance requests."
         );
       } finally {
@@ -145,10 +150,9 @@ function AdminDashboard() {
       setPriorityFilter(value);
     }
 
-    document.getElementById("all-requests")?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
+    // The request list lives in the "requests" section, so switch to it.
+    // The filters set above are kept in state, so the list opens already filtered.
+    setSection("requests");
   }
 
   function handleStatKeyDown(event, type, value) {
@@ -292,6 +296,12 @@ function AdminDashboard() {
 
     return formatStatus(status);
   }
+
+  const failedRequests = requests.filter(
+    (request) =>
+      request.payment_status === "failed" ||
+      request.payment_status === "cancelled"
+  );
 
   const pendingCount = requests.filter(
     (request) => request.status === "pending"
@@ -657,58 +667,30 @@ function AdminDashboard() {
     );
   }
 
+  // The sidebar links to /admin/dashboard?section=..., so the section lives in the URL.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const section = searchParams.get("section") || "overview";
+
+  function setSection(next) {
+    setSearchParams(next === "overview" ? {} : { section: next });
+  }
+
+  const sectionTitles = {
+    overview: "Dashboard",
+    insights: "Analytics and fundis",
+    requests: "Maintenance requests",
+    money: "Payments",
+  };
+
+
   return (
-    <div className="admin-dashboard">
-      <header className="admin-topbar">
-        <div className="admin-topbar-inner">
-          <a
-            href="#dashboard"
-            className="admin-brand"
-            onClick={(event) => {
-              event.preventDefault();
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-          >
-            <span>
-              Maintain<span className="admin-brand-accent">It</span>
-            </span>
-          </a>
+    <AdminLayout
+      title={section === "overview" ? "Dashboard" : sectionTitles[section]}
+      badges={{ payments: unresolvedPayments.length }}
+    >
+      <div className="admin-dashboard" id="dashboard">
 
-          <div className="admin-header-right">
-            <span className="admin-role-label">
-              Property administrator
-            </span>
-
-            <button
-              type="button"
-              className="admin-logout-button"
-              onClick={handleLogout}
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main className="admin-main" id="dashboard">
-        <section className="admin-welcome">
-          <div>
-            <p className="admin-eyebrow">OVERVIEW</p>
-
-            <h1>Admin Dashboard</h1>
-
-            <p className="admin-welcome-description">
-              Monitor maintenance activity, review requests, and
-              coordinate your fundi assignments.
-            </p>
-          </div>
-        </section>
-
-        {message && (
-          <div className="admin-error-message" role="alert">
-            <span>{message}</span>
-          </div>
-        )}
+        {section === "overview" && (<>
 
         <section
           className="admin-stats-grid"
@@ -852,7 +834,46 @@ function AdminDashboard() {
             </div>
           )}
         </section>
+        </>)}
 
+        {section === "insights" && (<>
+        <AdminAnalytics />
+        </>)}
+
+        {section === "money" && (<>
+        <div className="mi-tabs" role="tablist">
+          <button type="button" className={payTab === "pending" ? "is-on" : ""} onClick={() => setPayTab("pending")}>
+            Pending ({unresolvedPayments.length})
+          </button>
+          <button type="button" className={payTab === "failed" ? "is-on" : ""} onClick={() => setPayTab("failed")}>
+            Failed attempts ({failedRequests.length})
+          </button>
+        </div>
+
+        {payTab === "failed" ? (
+          <section className="admin-panel">
+            <h2>Failed or cancelled payments</h2>
+            {failedRequests.length === 0 ? (
+              <p className="admin-panel-message">No failed payments.</p>
+            ) : (
+              <table className="mi-table">
+                <thead><tr><th>Request</th><th>Tenant</th><th>Room</th><th>Method</th><th>Amount</th><th>Status</th></tr></thead>
+                <tbody>
+                  {failedRequests.map((r) => (
+                    <tr key={r.id || r.request_id}>
+                      <td>{formatCategory(r.category || r.title)}</td>
+                      <td>{r.tenant_name || "-"}</td>
+                      <td>{[r.property_name, r.room_number].filter(Boolean).join(", ") || "-"}</td>
+                      <td>{r.payment_method === "cash" ? "Cash" : "M-Pesa"}</td>
+                      <td>{formatPaymentAmount(r.repair_cost_cents)}</td>
+                      <td>{formatStatus(r.payment_status)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        ) : (<>
         <section className="admin-panel admin-payment-review-panel">
           <div className="admin-payment-review-heading">
             <div>
@@ -915,44 +936,10 @@ function AdminDashboard() {
             </div>
           )}
         </section>
+        </>)}
+        </>)}
 
-        <section className="admin-panel admin-management-panel">
-          <div>
-            <p className="admin-eyebrow">WORKSPACE</p>
-            <h2>Management</h2>
-
-            <p className="admin-panel-description">
-              Review tenant requests and manage maintenance assignments.
-            </p>
-          </div>
-
-          <div className="admin-management-actions">
-            <button
-              type="button"
-              className="admin-primary-button"
-              onClick={() => navigate("/admin/requests")}
-            >
-              Manage Requests
-            </button>
-
-            <button
-              type="button"
-              className="admin-secondary-button"
-              onClick={() => navigate("/admin/assignments")}
-            >
-              Assign Fundis
-            </button>
-
-            <button
-              type="button"
-              className="admin-secondary-button"
-              onClick={() => navigate("/admin/tenant-assignments")}
-            >
-              Assign Tenants to Rooms
-            </button>
-          </div>
-        </section>
-
+        {section === "requests" && (<>
         <section
           id="all-requests"
           className="admin-panel admin-all-requests"
@@ -1082,13 +1069,15 @@ function AdminDashboard() {
             </div>
           )}
         </section>
+        </>)}
+
 
         <footer className="admin-footer">
           <span>MaintainIt</span>
           <span>Property maintenance management</span>
         </footer>
-      </main>
-    </div>
+      </div>
+    </AdminLayout>
   );
 }
 
