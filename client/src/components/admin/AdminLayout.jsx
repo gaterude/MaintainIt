@@ -25,6 +25,7 @@ function AdminLayout({ title, description, badges = {}, children }) {
         dash("requests", "All requests"),
         page("/admin/requests", "Manage requests"),
         page("/admin/assignments", "Assign fundis"),
+        page("/admin/properties", "Properties and rooms"),
         page("/admin/tenant-assignments", "Tenants and rooms"),
       ],
     },

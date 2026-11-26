@@ -27,3 +27,6 @@ server/storage/maintenance-photos/*
 !server/storage/maintenance-photos/.gitkeep
 node_modules/
 client/dist/
+.neon
+
+.env.neon

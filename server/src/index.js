@@ -25,6 +25,7 @@ const maintenanceAiRoutes = require("./routes/maintenanceAiRoutes");
 const maintenancePhotoRoutes = require("./routes/maintenancePhotoRoutes");
 const fundiProfileRoutes = require("./routes/fundiProfileRoutes");
 const propertyAnalyticsRoutes = require("./routes/propertyAnalyticsRoutes");
+const propertyRoutes = require("./routes/propertyRoutes");
 
 const {
   startOverdueMaintenanceScheduler,
@@ -120,6 +121,7 @@ app.use("/api/maintenance-ai", maintenanceAiRoutes);
 app.use("/api/maintenance-photos", maintenancePhotoRoutes);
 app.use("/api/fundi-profiles", fundiProfileRoutes);
 app.use("/api/property-analytics", propertyAnalyticsRoutes);
+app.use("/api/properties", propertyRoutes);
 
 // Handle malformed JSON and other request errors.
 app.use((error, req, res, next) => {

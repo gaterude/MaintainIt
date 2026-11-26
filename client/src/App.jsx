@@ -8,6 +8,7 @@ import FundiDashboard from "./pages/fundi/FundiDashboard";
 import Register from "./pages/Register";
 import TenantAssignments from "./pages/admin/TenantAssignments";
 import AdminStaff from "./pages/admin/AdminStaff";
+import AdminProperties from "./pages/admin/AdminProperties";
 
 const HOME_BY_ROLE = {
   admin: "/admin/dashboard",
@@ -74,6 +75,10 @@ function App() {
         <Route
           path="/admin/tenant-assignments"
           element={<RequireRole role="admin"><TenantAssignments /></RequireRole>}
+        />
+        <Route
+          path="/admin/properties"
+          element={<RequireRole role="admin"><AdminProperties /></RequireRole>}
         />
         <Route
           path="/admin/staff"
