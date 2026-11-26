@@ -15,6 +15,7 @@ function AdminProperties() {
   const [address, setAddress] = useState("");
   const [propertyId, setPropertyId] = useState("");
   const [roomText, setRoomText] = useState("");
+  const [capacity, setCapacity] = useState(1);
 
   const load = useCallback(async () => {
     try {
@@ -75,7 +76,7 @@ function AdminProperties() {
     try {
       const data = await apiRequest(`/properties/${propertyId}/rooms`, {
         method: "POST",
-        body: JSON.stringify({ roomNumbers }),
+        body: JSON.stringify({ roomNumbers, capacity: Number(capacity) }),
       });
       toast.success(
         data.skipped?.length
@@ -88,6 +89,24 @@ function AdminProperties() {
       toast.error(error.message || "Unable to add the rooms.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Flow: ask for a new capacity -> server checks nobody would be squeezed out
+  // -> reload so the chip shows the new number.
+  async function changeCapacity(room) {
+    const answer = window.prompt(`How many tenants can room ${room.room_number} hold? (1 to 20)`, String(room.capacity));
+    if (answer === null) return;
+
+    try {
+      const data = await apiRequest(`/properties/rooms/${room.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ capacity: Number(answer) }),
+      });
+      toast.success(data.message || "Capacity updated.");
+      await load();
+    } catch (error) {
+      toast.error(error.message || "Unable to update the room.");
     }
   }
 
@@ -117,7 +136,17 @@ function AdminProperties() {
                     {property.rooms.length === 0 ? (
                       <em>No rooms yet</em>
                     ) : (
-                      property.rooms.map((room) => <b key={room.id}>{room.room_number}</b>)
+                      property.rooms.map((room) => (
+                        <b
+                          key={room.id}
+                          className="pr-room-chip"
+                          title="Click to change how many tenants this room can hold"
+                          onClick={() => changeCapacity(room)}
+                        >
+                          {room.room_number}
+                          <small>holds {room.capacity}</small>
+                        </b>
+                      ))
                     )}
                   </div>
                 </li>
@@ -162,7 +191,17 @@ function AdminProperties() {
                 placeholder="A1, A2, A3, B1"
               />
             </label>
-            <p className="pr-muted">Separate room numbers with commas. Rooms that already exist are skipped.</p>
+            <label>
+              Tenants each room can hold
+              <input
+                type="number"
+                min="1"
+                max="20"
+                value={capacity}
+                onChange={(e) => setCapacity(e.target.value)}
+              />
+            </label>
+            <p className="pr-muted">Separate room numbers with commas. Use 1 for a normal rental unit; a higher number for shared rooms. Rooms that already exist are skipped.</p>
             <button className="pr-submit" type="submit" disabled={saving || properties.length === 0}>
               {saving ? "Saving..." : "Add rooms"}
             </button>

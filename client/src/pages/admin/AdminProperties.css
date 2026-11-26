@@ -16,4 +16,7 @@
 .pr-rooms { display: flex; flex-wrap: wrap; gap: 6px; }
 .pr-rooms b { font-weight: 600; font-size: 13px; background: #f3f5f8; border: 1px solid #e3e7ee; border-radius: 6px; padding: 3px 9px; }
 .pr-rooms em { font-style: normal; color: #64708a; font-size: 13px; }
+.pr-rooms .pr-room-chip { cursor: pointer; display: inline-flex; gap: 6px; align-items: baseline; }
+.pr-rooms .pr-room-chip small { font-weight: 400; color: #64708a; font-size: 11px; }
+.pr-rooms .pr-room-chip:hover { border-color: #16a34a; }
 @media (max-width: 800px) { .pr-grid { grid-template-columns: 1fr; } }

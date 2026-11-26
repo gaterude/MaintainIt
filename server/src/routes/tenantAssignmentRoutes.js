@@ -11,21 +11,15 @@ router.use(authenticateToken);
 router.use(authorizeRole("admin"));
 
 // Get all registered tenants and their current room assignments.
-router.get(
-"/tenants",
-tenantAssignmentController.getAllTenants
-);
+router.get("/tenants", tenantAssignmentController.getAllTenants);
 
-// Get rooms with their current tenant counts.
-router.get(
-"/rooms",
-tenantAssignmentController.getAllRooms
-);
+// Get rooms with their capacity and current tenants.
+router.get("/rooms", tenantAssignmentController.getAllRooms);
 
 // Assign a tenant to a room or change their room assignment.
-router.post(
-"/assign",
-tenantAssignmentController.assignTenantToRoom
-);
+router.post("/assign", tenantAssignmentController.assignTenantToRoom);
+
+// Mark a tenant as moved out (no room).
+router.post("/vacate", tenantAssignmentController.vacateTenant);
 
 module.exports = router;

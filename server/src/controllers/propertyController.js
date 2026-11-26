@@ -3,6 +3,12 @@ const propertyRepository = require("../repositories/propertyRepository");
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_ROOMS_AT_ONCE = 100;
 
+// A room holds 1 to 20 tenants.
+function parseCapacity(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 1 && number <= 20 ? number : null;
+}
+
 async function listProperties(req, res) {
   try {
     const properties = await propertyRepository.listPropertiesWithRooms();
@@ -64,8 +70,14 @@ async function createRooms(req, res) {
     return res.status(400).json({ message: "A room number can be at most 50 characters." });
   }
 
+  const capacity = parseCapacity(req.body?.capacity ?? 1);
+
+  if (capacity === null) {
+    return res.status(400).json({ message: "Capacity must be a whole number from 1 to 20." });
+  }
+
   try {
-    const result = await propertyRepository.createRooms(propertyId, roomNumbers);
+    const result = await propertyRepository.createRooms(propertyId, roomNumbers, capacity);
 
     if (!result) {
       return res.status(404).json({ message: "Property not found." });
@@ -85,4 +97,37 @@ async function createRooms(req, res) {
   }
 }
 
-module.exports = { listProperties, createProperty, createRooms };
+async function updateRoomCapacity(req, res) {
+  const { roomId } = req.params;
+
+  if (!UUID.test(roomId)) {
+    return res.status(400).json({ message: "Invalid room ID." });
+  }
+
+  const capacity = parseCapacity(req.body?.capacity);
+
+  if (capacity === null) {
+    return res.status(400).json({ message: "Capacity must be a whole number from 1 to 20." });
+  }
+
+  try {
+    const result = await propertyRepository.updateRoomCapacity(roomId, capacity);
+
+    if (result.status === "not_found") {
+      return res.status(404).json({ message: "Room not found." });
+    }
+
+    if (result.status === "too_small") {
+      return res.status(409).json({
+        message: `${result.occupied} tenant(s) already live in this room. Vacate someone first or choose a larger capacity.`,
+      });
+    }
+
+    return res.status(200).json({ message: "Room capacity updated.", room: result.room });
+  } catch (error) {
+    console.error("Update room capacity error:", error);
+    return res.status(500).json({ message: "Unable to update the room." });
+  }
+}
+
+module.exports = { listProperties, createProperty, createRooms, updateRoomCapacity };

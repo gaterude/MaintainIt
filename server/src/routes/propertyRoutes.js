@@ -12,5 +12,6 @@ router.use(authenticateToken, authorizeRole("admin"));
 router.get("/", propertyController.listProperties);
 router.post("/", propertyController.createProperty);
 router.post("/:propertyId/rooms", propertyController.createRooms);
+router.patch("/rooms/:roomId", propertyController.updateRoomCapacity);
 
 module.exports = router;
