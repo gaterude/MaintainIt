@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import apiRequest from "../../services/api";
 import { toast } from "../toast/toast";
+import { usePropertyFilter } from "./propertyFilter";
 import { PhotoGallery } from "../maintenance-enhancements/EnhancementPanels";
 import "./AdminAnalytics.css";
 
@@ -37,21 +38,34 @@ const roomText = (r) => [r.property_name, r.room_number && `Room ${r.room_number
 function AdminAnalytics() {
   const [analytics, setAnalytics] = useState(null);
   const [details, setDetails] = useState({ completions: [], ratings: [] });
-  const [requests, setRequests] = useState([]);
+  const [allRequests, setAllRequests] = useState([]);
+  const { propertyId, matches } = usePropertyFilter();
+  // Requests limited to the chosen property (all of them when none is chosen).
+  const requests = useMemo(() => allRequests.filter(matches), [allRequests, matches]);
   const [view, setView] = useState(null);
 
+  // Reload when the chosen property changes. The server limits the analytics to
+  // that property; the request list is filtered in the browser (see above).
   useEffect(() => {
+    let cancelled = false;
+    const query = propertyId ? `?property=${encodeURIComponent(propertyId)}` : "";
+
     Promise.allSettled([
-      apiRequest("/property-analytics"),
-      apiRequest("/property-analytics/details"),
+      apiRequest(`/property-analytics${query}`),
+      apiRequest(`/property-analytics/details${query}`),
       apiRequest("/maintenance-requests/all"),
     ]).then(([a, d, r]) => {
+      if (cancelled) return;
       if (a.status === "fulfilled") setAnalytics(a.value.analytics);
       else toast.error(a.reason.message || "Unable to load analytics.");
       if (d.status === "fulfilled") setDetails(d.value.details || { completions: [], ratings: [] });
-      if (r.status === "fulfilled") setRequests(r.value.requests || []);
+      if (r.status === "fulfilled") setAllRequests(r.value.requests || []);
     });
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [propertyId]);
 
   async function setVerification(fundiId, status) {
     try {

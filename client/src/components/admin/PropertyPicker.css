@@ -1,0 +1,5 @@
+.pk-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: #fff; border: 1px solid #e3e7ee; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; color: #14213d; }
+.pk-bar label { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; }
+.pk-bar select { padding: 8px 11px; border: 1px solid #e3e7ee; border-radius: 8px; font: inherit; font-weight: 400; background: #fff; min-width: 180px; }
+.pk-bar select:focus { outline: 2px solid #bfe6cd; border-color: #16a34a; }
+.pk-note { font-size: 13px; color: #64708a; }

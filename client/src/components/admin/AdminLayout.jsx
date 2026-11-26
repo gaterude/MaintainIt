@@ -1,5 +1,6 @@
 import { useLocation } from "react-router-dom";
 import SidebarLayout from "../layout/SidebarLayout";
+import PropertyPicker from "./PropertyPicker";
 
 // Admin navigation. The dashboard sections live in the URL (?section=...),
 // so the sidebar can highlight the current one on every admin page.
@@ -15,6 +16,12 @@ function AdminLayout({ title, description, badges = {}, children }) {
     active: onDashboard && section === id,
     ...extra,
   });
+  // The property picker appears on every page that follows it: the whole
+  // dashboard, Manage requests and Assign fundis.
+  const showPicker =
+    onDashboard ||
+    location.pathname === "/admin/requests" ||
+    location.pathname === "/admin/assignments";
   const page = (to, label) => ({ label, to, active: location.pathname === to });
 
   const groups = [
@@ -35,6 +42,7 @@ function AdminLayout({ title, description, badges = {}, children }) {
 
   return (
     <SidebarLayout roleLabel="Property administrator" groups={groups} title={title} description={description}>
+      {showPicker && <PropertyPicker />}
       {children}
     </SidebarLayout>
   );

@@ -124,27 +124,49 @@ async function updateVerification(userId, status) {
   return result.rows[0] || null;
 }
 
-async function getAnalytics() {
+// propertyId is optional: when given, every number is limited to requests in
+// that property's rooms. When null, the totals cover all properties as before.
+async function getAnalytics(propertyId = null) {
+  const params = [propertyId];
   const [summary, categories, monthly, fundis, properties] = await Promise.all([
     pool.query(`SELECT COUNT(*)::int AS total_requests,
-      COUNT(*) FILTER (WHERE status = 'completed')::int AS completed_requests,
-      COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled'))::int AS open_requests,
-      COUNT(*) FILTER (WHERE status = 'cancelled')::int AS cancelled_requests,
-      COALESCE((SELECT SUM(repair_cost_cents) FROM maintenance_responsibilities),0)::bigint AS recorded_repair_cost_cents,
+      COUNT(*) FILTER (WHERE mr.status = 'completed')::int AS completed_requests,
+      COUNT(*) FILTER (WHERE mr.status NOT IN ('completed','cancelled'))::int AS open_requests,
+      COUNT(*) FILTER (WHERE mr.status = 'cancelled')::int AS cancelled_requests,
+      COALESCE((SELECT SUM(resp.repair_cost_cents)
+                FROM maintenance_responsibilities resp
+                JOIN maintenance_requests mr3 ON mr3.id = resp.maintenance_request_id
+                JOIN rooms rm3 ON rm3.id = mr3.room_id
+                WHERE ($1::uuid IS NULL OR rm3.property_id = $1)),0)::bigint AS recorded_repair_cost_cents,
       (SELECT ROUND(AVG(EXTRACT(EPOCH FROM (ma.completed_at - mr2.created_at)) / 3600)::numeric, 1)
          FROM maintenance_assignments ma
          JOIN maintenance_requests mr2 ON mr2.id = ma.maintenance_request_id
-         WHERE ma.completed_at IS NOT NULL) AS avg_completion_hours
-      FROM maintenance_requests`),
-    pool.query(`SELECT category, COUNT(*)::int AS request_count FROM maintenance_requests GROUP BY category ORDER BY request_count DESC`),
-    pool.query(`SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') AS month, COUNT(*)::int AS request_count
-      FROM maintenance_requests WHERE created_at >= NOW() - INTERVAL '12 months'
-      GROUP BY 1 ORDER BY 1`),
+         JOIN rooms rm2 ON rm2.id = mr2.room_id
+         WHERE ma.completed_at IS NOT NULL
+           AND ($1::uuid IS NULL OR rm2.property_id = $1)) AS avg_completion_hours
+      FROM maintenance_requests mr
+      JOIN rooms rm ON rm.id = mr.room_id
+      WHERE ($1::uuid IS NULL OR rm.property_id = $1)`, params),
+    pool.query(`SELECT mr.category, COUNT(*)::int AS request_count
+      FROM maintenance_requests mr
+      JOIN rooms rm ON rm.id = mr.room_id
+      WHERE ($1::uuid IS NULL OR rm.property_id = $1)
+      GROUP BY mr.category ORDER BY request_count DESC`, params),
+    pool.query(`SELECT to_char(date_trunc('month', mr.created_at), 'YYYY-MM') AS month, COUNT(*)::int AS request_count
+      FROM maintenance_requests mr
+      JOIN rooms rm ON rm.id = mr.room_id
+      WHERE mr.created_at >= NOW() - INTERVAL '12 months'
+        AND ($1::uuid IS NULL OR rm.property_id = $1)
+      GROUP BY 1 ORDER BY 1`, params),
     pool.query(`SELECT u.id, u.name, COALESCE(fp.verification_status, 'unverified') AS verification_status, COUNT(DISTINCT ma.maintenance_request_id) FILTER (WHERE ma.completed_at IS NOT NULL)::int AS completed_jobs,
       ROUND(AVG(r.score)::numeric,2) AS average_rating, COUNT(r.id)::int AS rating_count
-      FROM users u LEFT JOIN fundi_profiles fp ON fp.user_id = u.id LEFT JOIN maintenance_assignments ma ON ma.fundi_id = u.id
+      FROM users u LEFT JOIN fundi_profiles fp ON fp.user_id = u.id
+      LEFT JOIN maintenance_assignments ma ON ma.fundi_id = u.id
+        AND ($1::uuid IS NULL OR EXISTS (
+          SELECT 1 FROM maintenance_requests x JOIN rooms y ON y.id = x.room_id
+          WHERE x.id = ma.maintenance_request_id AND y.property_id = $1))
       LEFT JOIN maintenance_ratings r ON r.maintenance_request_id = ma.maintenance_request_id
-      WHERE u.role = 'fundi' GROUP BY u.id,u.name,fp.verification_status ORDER BY completed_jobs DESC`),
+      WHERE u.role = 'fundi' GROUP BY u.id,u.name,fp.verification_status ORDER BY completed_jobs DESC`, params),
     pool.query(`SELECT p.id, p.name, COUNT(mr.id)::int AS request_count,
       COUNT(mr.id) FILTER (WHERE mr.status = 'completed')::int AS completed_count,
       COALESCE(SUM(cost.repair_cost_cents),0)::bigint AS repair_cost_cents
@@ -154,28 +176,34 @@ async function getAnalytics() {
       LEFT JOIN (SELECT maintenance_request_id, SUM(repair_cost_cents) AS repair_cost_cents
                  FROM maintenance_responsibilities GROUP BY maintenance_request_id) cost
         ON cost.maintenance_request_id = mr.id
-      GROUP BY p.id, p.name ORDER BY request_count DESC`)
+      WHERE ($1::uuid IS NULL OR p.id = $1)
+      GROUP BY p.id, p.name ORDER BY request_count DESC`, params)
   ]);
   return { summary: summary.rows[0], categories: categories.rows, monthly: monthly.rows, fundis: fundis.rows, properties: properties.rows };
 }
 
 // Read-only lists behind the clickable analytics tiles (completion times and ratings).
-async function getAnalyticsDetails() {
+async function getAnalyticsDetails(propertyId = null) {
+  const params = [propertyId];
   const [completions, ratings] = await Promise.all([
     pool.query(`SELECT mr.id AS request_id, mr.category, mr.description, ma.completed_at,
         ROUND((EXTRACT(EPOCH FROM (ma.completed_at - mr.created_at)) / 3600)::numeric, 1) AS hours,
         u.name AS fundi_name
       FROM maintenance_assignments ma
       JOIN maintenance_requests mr ON mr.id = ma.maintenance_request_id
+      JOIN rooms rm ON rm.id = mr.room_id
       LEFT JOIN users u ON u.id = ma.fundi_id
       WHERE ma.completed_at IS NOT NULL
-      ORDER BY ma.completed_at DESC LIMIT 200`),
+        AND ($1::uuid IS NULL OR rm.property_id = $1)
+      ORDER BY ma.completed_at DESC LIMIT 200`, params),
     pool.query(`SELECT r.id, r.score, r.comment, r.created_at, mr.category, mr.description,
         (SELECT u.name FROM maintenance_assignments ma JOIN users u ON u.id = ma.fundi_id
           WHERE ma.maintenance_request_id = mr.id ORDER BY ma.completed_at DESC NULLS LAST LIMIT 1) AS fundi_name
       FROM maintenance_ratings r
       JOIN maintenance_requests mr ON mr.id = r.maintenance_request_id
-      ORDER BY r.created_at DESC LIMIT 200`),
+      JOIN rooms rm ON rm.id = mr.room_id
+      WHERE ($1::uuid IS NULL OR rm.property_id = $1)
+      ORDER BY r.created_at DESC LIMIT 200`, params),
   ]);
   return { completions: completions.rows, ratings: ratings.rows };
 }

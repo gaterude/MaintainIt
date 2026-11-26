@@ -13,11 +13,16 @@ import AdminLayout from "../../components/admin/AdminLayout";
 import AdminAnalytics from "../../components/admin/AdminAnalytics";
 import { toast } from "../../components/toast/toast";
 import PropertyPayments from "../../components/admin/PropertyPayments";
+import { usePropertyFilter } from "../../components/admin/propertyFilter";
 
 function AdminDashboard() {
   const navigate = useNavigate();
 
-  const [requests, setRequests] = useState([]);
+  const [allRequests, setAllRequests] = useState([]);
+  const { matches } = usePropertyFilter();
+  // Everything on this page follows the property picker: when a property is
+  // chosen, "requests" holds only that property's requests (all when none).
+  const requests = useMemo(() => allRequests.filter(matches), [allRequests, matches]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -28,7 +33,11 @@ function AdminDashboard() {
   // (see the two useEffect blocks below).
   const [now, setNow] = useState(0);
 
-  const [unresolvedPayments, setUnresolvedPayments] = useState([]);
+  const [allUnresolvedPayments, setUnresolvedPayments] = useState([]);
+  const unresolvedPayments = useMemo(
+    () => allUnresolvedPayments.filter(matches),
+    [allUnresolvedPayments, matches]
+  );
   const [paymentLoading, setPaymentLoading] = useState(true);
   const [paymentRefreshing, setPaymentRefreshing] = useState(false);
   const [paymentError, setPaymentError] = useState("");
@@ -98,7 +107,7 @@ function AdminDashboard() {
       try {
         const data = await apiRequest("/maintenance-requests/all");
 
-        setRequests(
+        setAllRequests(
           Array.isArray(data.requests) ? data.requests : []
         );
       } catch (error) {
@@ -578,7 +587,7 @@ function AdminDashboard() {
         </div>
 
         <p className="admin-stat-number">
-          {loading ? "—" : count}
+          {loading ? "-" : count}
         </p>
 
         <h2>{title}</h2>
@@ -957,7 +966,7 @@ function AdminDashboard() {
             </div>
 
             <div className="admin-total-count">
-              <span>{loading ? "—" : requests.length}</span>
+              <span>{loading ? "-" : requests.length}</span>
               <small>Total requests</small>
             </div>
           </div>

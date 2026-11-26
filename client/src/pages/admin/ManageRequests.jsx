@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import apiRequest from "../../services/api";
 import AdminLayout from "../../components/admin/AdminLayout";
 import { toast } from "../../components/toast/toast";
+import { usePropertyFilter } from "../../components/admin/propertyFilter";
 import "./ManageRequests.css";
 
 const CATEGORIES = ["plumbing", "electrical", "cleaning", "appliance", "structural", "other"];
@@ -20,6 +21,9 @@ function ManageRequests() {
   const navigate = useNavigate();
 
   const [requests, setRequests] = useState([]);
+  const { matches } = usePropertyFilter();
+  // Pending requests limited to the chosen property (all when none is chosen).
+  const scoped = useMemo(() => requests.filter(matches), [requests, matches]);
   const [loading, setLoading] = useState(true);
   const [submittingId, setSubmittingId] = useState(null);
   // Which request has its decision form open (one at a time keeps the table tidy).
@@ -135,15 +139,15 @@ function ManageRequests() {
   }
 
   const priorityCounts = {
-    urgent: requests.filter((r) => getPriority(r) === "urgent").length,
-    medium: requests.filter((r) => getPriority(r) === "medium").length,
-    low: requests.filter((r) => getPriority(r) === "low").length,
+    urgent: scoped.filter((r) => getPriority(r) === "urgent").length,
+    medium: scoped.filter((r) => getPriority(r) === "medium").length,
+    low: scoped.filter((r) => getPriority(r) === "low").length,
   };
 
   const filteredRequests = useMemo(() => {
     const term = search.trim().toLowerCase();
 
-    return requests.filter((request) => {
+    return scoped.filter((request) => {
       const text = [request.tenant_name, request.tenant_email, request.description, request.category, request.title, request.property_name, request.room_number]
         .filter(Boolean)
         .join(" ")
@@ -155,7 +159,7 @@ function ManageRequests() {
         (categoryFilter === "all" || request.category === categoryFilter)
       );
     });
-  }, [requests, search, priorityFilter, categoryFilter]);
+  }, [scoped, search, priorityFilter, categoryFilter]);
 
   return (
     <AdminLayout
@@ -205,12 +209,12 @@ function ManageRequests() {
       <section className="mr-card">
         <div className="mr-card-head">
           <h2>Pending requests ({filteredRequests.length})</h2>
-          <span>Showing {filteredRequests.length} of {requests.length}</span>
+          <span>Showing {filteredRequests.length} of {scoped.length}</span>
         </div>
 
         {loading ? (
           <p className="mr-empty">Loading requests...</p>
-        ) : requests.length === 0 ? (
+        ) : scoped.length === 0 ? (
           <p className="mr-empty">No pending requests. New requests from tenants will appear here.</p>
         ) : filteredRequests.length === 0 ? (
           <p className="mr-empty">No pending requests match your search and filters.</p>

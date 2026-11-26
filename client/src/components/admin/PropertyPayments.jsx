@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import apiRequest from "../../services/api";
 import { toast } from "../toast/toast";
+import { usePropertyFilter } from "./propertyFilter";
 import "./PropertyPayments.css";
 
 // Jobs the property is responsible for. After the fundi completes the work,
@@ -24,6 +25,9 @@ export default function PropertyPayments() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
+  const { matches } = usePropertyFilter();
+  // Only the chosen property's jobs (all of them when none is chosen).
+  const visibleJobs = jobs.filter(matches);
 
   const load = useCallback(async () => {
     try {
@@ -139,16 +143,16 @@ export default function PropertyPayments() {
           <h2>Property payments due</h2>
           <p>Completed jobs the property is responsible for paying.</p>
         </div>
-        <span className="pp-count">{jobs.length} open</span>
+        <span className="pp-count">{visibleJobs.length} open</span>
       </div>
 
       {loading ? (
-        <p className="pp-empty">Loading…</p>
-      ) : jobs.length === 0 ? (
+        <p className="pp-empty">Loading...</p>
+      ) : visibleJobs.length === 0 ? (
         <p className="pp-empty">Nothing to pay. All property-funded jobs are settled.</p>
       ) : (
         <ul className="pp-list">
-          {jobs.map((job) => (
+          {visibleJobs.map((job) => (
             <li key={job.id} className="pp-row">
               <div className="pp-main">
                 <strong>{label(job.category || job.title)}</strong>
