@@ -218,8 +218,12 @@ process.once("SIGINT", () => shutdown("SIGINT"));
 process.once("SIGTERM", () => shutdown("SIGTERM"));
 
 } catch (error) {
-console.error("MaintainIt startup failed:", error.message);
-
+console.error(
+  "MaintainIt startup failed:",
+  error.message,
+  error.code || "",
+  (error.errors || []).map((e) => `${e.code} ${e.address}:${e.port}`).join(", ")
+);
 
 await pool.end().catch(() => {});
 process.exitCode = 1;
