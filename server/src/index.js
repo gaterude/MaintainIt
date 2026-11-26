@@ -152,13 +152,16 @@ message: "An unexpected server error occurred.",
 
 async function startServer() {
 try {
-if (
-!process.env.DB_HOST ||
-!process.env.DB_NAME ||
-!process.env.DB_USER ||
-!process.env.DB_PASSWORD ||
-!process.env.JWT_SECRET
-) {
+const hasDatabaseConfig =
+  Boolean(process.env.DATABASE_URL) ||
+  Boolean(
+    process.env.DB_HOST &&
+      process.env.DB_NAME &&
+      process.env.DB_USER &&
+      process.env.DB_PASSWORD
+  );
+
+if (!hasDatabaseConfig || !process.env.JWT_SECRET) {
 throw new Error(
 "A required database or authentication environment variable is missing."
 );
