@@ -16,8 +16,8 @@ const MIGRATION_DIRECTORY = path.resolve(
 );
 
 async function runMigrations() {
-  if (!process.env.DB_NAME) {
-    throw new Error("DB_NAME is not configured.");
+   if (!process.env.DATABASE_URL && !process.env.DB_NAME) {
+    throw new Error("Set DATABASE_URL (hosted) or DB_NAME (local).");
   }
 
   if (!fs.existsSync(MIGRATION_DIRECTORY)) {
@@ -37,7 +37,13 @@ async function runMigrations() {
   let lockAcquired = false;
 
   try {
-    console.log(`Target database: ${process.env.DB_NAME}`);
+        console.log(
+      `Target database: ${
+        process.env.DATABASE_URL
+          ? new URL(process.env.DATABASE_URL).host
+          : process.env.DB_NAME
+      }`
+    );
     console.log(`Found ${files.length} migration files.`);
 
     // Prevent simultaneous migration runs.
