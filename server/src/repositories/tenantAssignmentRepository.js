@@ -1,5 +1,13 @@
 const pool = require("../config/database");
 
+// Errors with a status code so the controller can answer 404 / 409 correctly.
+function httpError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
+// Every registered tenant, with their room if they have one.
 async function findAllTenants() {
   const result = await pool.query(`
     SELECT
@@ -14,12 +22,9 @@ async function findAllTenants() {
       p.name AS property_name,
       p.address AS property_address
     FROM users u
-    LEFT JOIN tenants t
-      ON t.user_id = u.id
-    LEFT JOIN rooms r
-      ON r.id = t.room_id
-    LEFT JOIN properties p
-      ON p.id = r.property_id
+    LEFT JOIN tenants t ON t.user_id = u.id
+    LEFT JOIN rooms r ON r.id = t.room_id
+    LEFT JOIN properties p ON p.id = r.property_id
     WHERE u.role = 'tenant'
     ORDER BY u.name ASC
   `);
@@ -27,131 +32,96 @@ async function findAllTenants() {
   return result.rows;
 }
 
+// Every room with its capacity and who is in it. "Free spots" is derived
+// (capacity minus occupants) rather than stored, so it can never go out of date.
 async function findAllRooms() {
   const result = await pool.query(`
     SELECT
       r.id AS room_id,
       r.room_number,
+      r.capacity,
       r.property_id,
       p.name AS property_name,
       p.address AS property_address,
-      COUNT(t.id)::INTEGER AS tenant_count
+      COUNT(t.id)::INTEGER AS tenant_count,
+      COALESCE(
+        json_agg(u.name ORDER BY u.name) FILTER (WHERE t.id IS NOT NULL),
+        '[]'
+      ) AS occupants
     FROM rooms r
-    JOIN properties p
-      ON p.id = r.property_id
-    LEFT JOIN tenants t
-      ON t.room_id = r.id
-    GROUP BY
-      r.id,
-      r.room_number,
-      r.property_id,
-      p.name,
-      p.address
-    ORDER BY
-      p.name ASC,
-      r.room_number ASC
+    JOIN properties p ON p.id = r.property_id
+    LEFT JOIN tenants t ON t.room_id = r.id
+    LEFT JOIN users u ON u.id = t.user_id
+    GROUP BY r.id, r.room_number, r.capacity, r.property_id, p.name, p.address
+    ORDER BY p.name ASC, r.room_number ASC
   `);
 
   return result.rows;
 }
 
+// Flow: lock the tenant -> lock the room -> count who is already inside
+// (not counting this tenant) -> refuse if full -> save. The room lock means two
+// admins clicking at the same moment cannot both take the last spot.
 async function assignTenantToRoom(userId, roomId) {
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
 
-    // Confirm that the selected user is a registered tenant.
     const userResult = await client.query(
-      `
-      SELECT id
-      FROM users
-      WHERE id = $1
-        AND role = 'tenant'
-      FOR UPDATE
-      `,
+      `SELECT id FROM users WHERE id = $1 AND role = 'tenant' FOR UPDATE`,
       [userId]
     );
 
     if (userResult.rows.length === 0) {
-      throw new Error("The selected tenant does not exist.");
+      throw httpError(404, "The selected tenant does not exist.");
     }
 
-    // Confirm that the selected room exists.
     const roomResult = await client.query(
-      `
-      SELECT id
-      FROM rooms
-      WHERE id = $1
-      `,
+      `SELECT id, capacity FROM rooms WHERE id = $1 FOR UPDATE`,
       [roomId]
     );
 
     if (roomResult.rows.length === 0) {
-      throw new Error("The selected room does not exist.");
+      throw httpError(404, "The selected room does not exist.");
     }
 
-    // Update the existing tenant profile when one exists.
-   const existingTenant = await client.query(
-  `
-  SELECT id, room_id
-  FROM tenants
-  WHERE user_id = $1
-  FOR UPDATE
-  `,
-  [userId]
-);
+    const existing = await client.query(
+      `SELECT id, room_id FROM tenants WHERE user_id = $1 FOR UPDATE`,
+      [userId]
+    );
 
-if (
-  existingTenant.rows.length > 0 &&
-  existingTenant.rows[0].room_id === roomId
-) {
-  throw new Error(
-    "This tenant is already assigned to that room."
-  );
-}
+    if (existing.rows.length > 0 && existing.rows[0].room_id === roomId) {
+      throw httpError(409, "This tenant is already assigned to that room.");
+    }
+
+    const occupied = await client.query(
+      `SELECT COUNT(*)::INTEGER AS n FROM tenants WHERE room_id = $1 AND user_id <> $2`,
+      [roomId, userId]
+    );
+
+    if (occupied.rows[0].n >= roomResult.rows[0].capacity) {
+      throw httpError(409, "This room is full. Choose another room or vacate someone first.");
+    }
 
     let result;
 
-    if (existingTenant.rows.length > 0) {
+    if (existing.rows.length > 0) {
       result = await client.query(
-        `
-        UPDATE tenants
-        SET
-          room_id = $1,
-          updated_at = NOW()
-        WHERE user_id = $2
-        RETURNING *
-        `,
+        `UPDATE tenants SET room_id = $1, updated_at = NOW()
+         WHERE user_id = $2 RETURNING *`,
         [roomId, userId]
       );
     } else {
-      // Create the tenant profile when assigning a room
-      // to a newly registered tenant.
       result = await client.query(
-        `
-        INSERT INTO tenants (
-          id,
-          user_id,
-          room_id,
-          created_at,
-          updated_at
-        )
-        VALUES (
-          gen_random_uuid(),
-          $1,
-          $2,
-          NOW(),
-          NOW()
-        )
-        RETURNING *
-        `,
+        `INSERT INTO tenants (id, user_id, room_id, created_at, updated_at)
+         VALUES (gen_random_uuid(), $1, $2, NOW(), NOW())
+         RETURNING *`,
         [userId, roomId]
       );
     }
 
     await client.query("COMMIT");
-
     return result.rows[0];
   } catch (error) {
     await client.query("ROLLBACK");
@@ -161,8 +131,26 @@ if (
   }
 }
 
+// The tenant moves out: they keep their account and their old requests, but
+// have no room until the admin assigns one again.
+async function vacateTenant(userId) {
+  const result = await pool.query(
+    `UPDATE tenants SET room_id = NULL, updated_at = NOW()
+     WHERE user_id = $1 AND room_id IS NOT NULL
+     RETURNING id, user_id`,
+    [userId]
+  );
+
+  if (result.rows.length === 0) {
+    throw httpError(404, "This tenant does not have a room to vacate.");
+  }
+
+  return result.rows[0];
+}
+
 module.exports = {
   findAllTenants,
   findAllRooms,
   assignTenantToRoom,
+  vacateTenant,
 };
